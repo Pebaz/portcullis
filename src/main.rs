@@ -80,27 +80,32 @@ fn main()
 
         gl.bind_texture(glow::TEXTURE_2D, Some(texture));
 
-        #[rustfmt::skip]
-        let image_data = [
-            // R, G, B, A
-            255, 255, 255,
-            0, 255, 0,
-            255, 0, 0,
-            255, 255, 255,
-            0, 0, 255,
-        ];
+        // #[rustfmt::skip]
+        // let image_data = [
+        //     // R, G, B, A
+        //     255, 255, 255,
+        //     0, 255, 0,
+        //     255, 0, 0,
+        //     255, 255, 255,
+        //     0, 0, 255,
+        // ];
+
+        // gl.pixel_store_i32(glow::UNPACK_ALIGNMENT, 1);
 
         gl.tex_image_2d(
             glow::TEXTURE_2D,
             0,
-            glow::RGB as i32,
-            2,
-            2,
+            glow::RGBA8 as i32,
+            width as i32,
+            height as i32,
             0,
-            glow::RGB,
+            glow::RGBA,
             glow::UNSIGNED_BYTE,
-            Some(&image_data),
+            Some(&data2),
         );
+
+        gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MIN_FILTER, glow::LINEAR as i32);
+        gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MAG_FILTER, glow::LINEAR as i32);
 
         // gl.tex_image_2d(
         //     glow::TEXTURE_2D,
