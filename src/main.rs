@@ -68,13 +68,11 @@ fn main()
 
         gl.clear_color(0.1, 0.2, 0.3, 1.0);
 
-        let image = image::open("res/img/Crate.png").unwrap();
+        let image = image::open("res/img/Disney-Logo.png").unwrap();
         let width = image.width();
         let height = image.height();
         let data = image.into_rgba8();
         let data2 = data.into_vec();
-
-        println!("{:?}", &data2[.. 4]);
 
         let texture = gl.create_texture().unwrap();
 
@@ -92,6 +90,9 @@ fn main()
 
         // gl.pixel_store_i32(glow::UNPACK_ALIGNMENT, 1);
 
+        gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MIN_FILTER, glow::LINEAR as i32);
+        gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MAG_FILTER, glow::LINEAR as i32);
+
         gl.tex_image_2d(
             glow::TEXTURE_2D,
             0,
@@ -104,8 +105,7 @@ fn main()
             Some(&data2),
         );
 
-        gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MIN_FILTER, glow::LINEAR as i32);
-        gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MAG_FILTER, glow::LINEAR as i32);
+        gl.generate_mipmap(glow::TEXTURE_2D);
 
         // gl.tex_image_2d(
         //     glow::TEXTURE_2D,
@@ -157,6 +157,9 @@ fn main()
             gl.active_texture(glow::TEXTURE0);
             gl.bind_texture(glow::TEXTURE_2D, Some(texture));
 
+            gl.enable(glow::BLEND);
+            gl.blend_func(glow::SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA);
+
             draw_quad(
                 &gl,
                 program,
@@ -180,7 +183,7 @@ fn main()
                 program,
                 glam::vec2(640.0, 300.0),
                 glam::vec2(512.0, 256.0),
-                glam::vec4(0.0, 0.6, 1.0, 1.0),
+                glam::vec4(1.0, 1.0, 1.0, 1.0),
                 orthographic_projection_matrix,
             );
 
