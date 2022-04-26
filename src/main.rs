@@ -139,15 +139,18 @@ fn main()
                 }
             }
 
+            let window_width = window.size().0 as f32;
+            let window_height = window.size().1 as f32;
+
             gl.clear(glow::COLOR_BUFFER_BIT);
 
             let orthographic_projection_matrix =
-                glam::f32::Mat4::orthographic_rh(0.0, window.size().0 as f32, window.size().1 as f32, 0.0, -1.0, 1.0);
+                glam::f32::Mat4::orthographic_rh(0.0, window_width, window_height, 0.0, -1.0, 1.0);
 
             draw_quad(
                 &gl,
                 program,
-                glam::vec2(32.0, 32.0),
+                glam::vec2(0.0, 0.0),
                 glam::vec2(64.0, 64.0),
                 glam::vec4(0.6, 1.0, 0.0, 1.0),
                 orthographic_projection_matrix,
@@ -156,17 +159,18 @@ fn main()
             draw_quad(
                 &gl,
                 program,
-                glam::vec2(64.0, 64.0),
+                glam::vec2(32.0, 32.0),
                 glam::vec2(64.0, 64.0),
                 glam::vec4(1.0, 0.6, 0.0, 0.5),
                 orthographic_projection_matrix,
             );
 
+            let logo_dims = glam::vec2(512.0, 256.0);
             draw_quad_textured(
                 &gl,
                 program,
-                glam::vec2(640.0, 300.0),
-                glam::vec2(512.0, 256.0),
+                glam::vec2(window_width / 2.0 - (logo_dims.x / 2.0), window_height / 2.0 - (logo_dims.y / 2.0)),
+                logo_dims,
                 glam::vec4(1.0, 1.0, 1.0, 1.0),
                 orthographic_projection_matrix,
                 texture,
@@ -196,7 +200,7 @@ unsafe fn draw_quad(
     gl.uniform_4_f32(Some(&rectangle_color), color.x, color.y, color.z, color.w);
 
     let rectangle_position = gl.get_uniform_location(program, "rectangle_position").unwrap();
-    gl.uniform_2_f32(Some(&rectangle_position), position.x, position.y);
+    gl.uniform_2_f32(Some(&rectangle_position), position.x + dimensions.x / 2.0, position.y + dimensions.y / 2.0);
 
     let rectangle_dimensions = gl.get_uniform_location(program, "rectangle_dimensions").unwrap();
     gl.uniform_2_f32(Some(&rectangle_dimensions), dimensions.x, dimensions.y);
