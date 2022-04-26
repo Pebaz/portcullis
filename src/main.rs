@@ -44,10 +44,12 @@ fn main()
             let shader = gl.create_shader(*shader_type).expect("Cannot create shader");
             gl.shader_source(shader, &format!("{}\n{}", shader_version, shader_source));
             gl.compile_shader(shader);
+
             if !gl.get_shader_compile_status(shader)
             {
                 panic!("{}", gl.get_shader_info_log(shader));
             }
+
             gl.attach_shader(program, shader);
             shaders.push(shader);
         }
@@ -77,18 +79,6 @@ fn main()
         let texture = gl.create_texture().unwrap();
 
         gl.bind_texture(glow::TEXTURE_2D, Some(texture));
-
-        // #[rustfmt::skip]
-        // let image_data = [
-        //     // R, G, B, A
-        //     255, 255, 255,
-        //     0, 255, 0,
-        //     255, 0, 0,
-        //     255, 255, 255,
-        //     0, 0, 255,
-        // ];
-
-        // gl.pixel_store_i32(glow::UNPACK_ALIGNMENT, 1);
 
         gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MIN_FILTER, glow::LINEAR as i32);
         gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MAG_FILTER, glow::LINEAR as i32);
@@ -154,12 +144,6 @@ fn main()
             let orthographic_projection_matrix =
                 glam::f32::Mat4::orthographic_rh(0.0, window.size().0 as f32, window.size().1 as f32, 0.0, -1.0, 1.0);
 
-            gl.active_texture(glow::TEXTURE0);
-            gl.bind_texture(glow::TEXTURE_2D, Some(texture));
-
-            gl.enable(glow::BLEND);
-            gl.blend_func(glow::SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA);
-
             draw_quad(
                 &gl,
                 program,
@@ -174,17 +158,18 @@ fn main()
                 program,
                 glam::vec2(64.0, 64.0),
                 glam::vec2(64.0, 64.0),
-                glam::vec4(1.0, 0.6, 0.0, 1.0),
+                glam::vec4(1.0, 0.6, 0.0, 0.5),
                 orthographic_projection_matrix,
             );
 
-            draw_quad(
+            draw_quad_textured(
                 &gl,
                 program,
                 glam::vec2(640.0, 300.0),
                 glam::vec2(512.0, 256.0),
                 glam::vec4(1.0, 1.0, 1.0, 1.0),
                 orthographic_projection_matrix,
+                texture,
             );
 
             window.gl_swap_window();
@@ -205,7 +190,7 @@ unsafe fn draw_quad(
     dimensions: glam::Vec2,
     color: glam::Vec4,
     orthographic_projection_matrix: glam::Mat4,
-)
+) -> ()
 {
     let rectangle_color = gl.get_uniform_location(program, "rectangle_color").unwrap();
     gl.uniform_4_f32(Some(&rectangle_color), color.x, color.y, color.z, color.w);
@@ -224,4 +209,31 @@ unsafe fn draw_quad(
     );
 
     gl.draw_arrays(glow::QUADS, 0, 4);
+}
+
+unsafe fn draw_quad_textured(
+    gl: &Context,
+    program: NativeProgram,
+    position: glam::Vec2,
+    dimensions: glam::Vec2,
+    color: glam::Vec4,
+    orthographic_projection_matrix: glam::Mat4,
+    texture: NativeTexture,
+) -> ()
+{
+    gl.active_texture(glow::TEXTURE0);
+    gl.bind_texture(glow::TEXTURE_2D, Some(texture));
+
+    gl.enable(glow::BLEND);
+    gl.blend_func(glow::SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA);
+
+    let using_rectangle_texture = gl.get_uniform_location(program, "using_rectangle_texture").unwrap();
+    gl.uniform_1_u32(Some(&using_rectangle_texture), 1);
+
+    draw_quad(gl, program, position, dimensions, color, orthographic_projection_matrix);
+
+    let using_rectangle_texture = gl.get_uniform_location(program, "using_rectangle_texture").unwrap();
+    gl.uniform_1_u32(Some(&using_rectangle_texture), 0);
+
+    gl.bind_texture(glow::TEXTURE_2D, None);
 }
