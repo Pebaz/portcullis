@@ -1,3 +1,5 @@
+use std::time::{SystemTime, UNIX_EPOCH};
+
 use glam;
 use glow::*;
 use glow_glyph::{ab_glyph, GlyphBrushBuilder, Section, Text};
@@ -102,8 +104,12 @@ fn main()
         let mut glyph_brush = GlyphBrushBuilder::using_font(font).build(&gl);
 
         let mut running = true;
+        let time_counter_milliseconds = std::time::Instant::now();
+
         while running
         {
+            let time_milliseconds = time_counter_milliseconds.elapsed().as_millis() as f32 / 1000.0;
+
             for event in events_loop.poll_iter()
             {
                 match event
@@ -175,13 +181,12 @@ fn main()
                 screen_position: (30.0, 90.0),
                 bounds: (window_width, window_height),
                 text: vec![Text::default()
-                    .with_text("Hello glow_glyph!")
+                    .with_text(format!("{}", time_milliseconds).as_str())
                     .with_color([1.0, 1.0, 1.0, 1.0])
                     .with_scale(40.0)],
                 ..Section::default()
             });
 
-            // Draw the text!
             glyph_brush.draw_queued(&gl, window_width as u32, window_height as u32).expect("Draw queued");
 
             window.gl_swap_window();

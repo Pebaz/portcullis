@@ -22,10 +22,5 @@ void main()
 {
     vec2 vert = verts[gl_VertexID] * rectangle_dimensions + rectangle_position;
     uv = uvs[gl_VertexID];
-
-    gl_Position = orthographic_projection * vec4(
-        vert,
-        0.0,
-        1.0
-    );
+    gl_Position = orthographic_projection * vec4(vert, 0.0, 1.0);
 }
