@@ -1,5 +1,6 @@
 use glam;
 use glow::*;
+use image::GenericImageView;
 use sdl2::event::{Event, WindowEvent};
 use sdl2::keyboard::Keycode;
 
@@ -7,7 +8,7 @@ fn main()
 {
     unsafe {
         // Create a context from a sdl2 window
-        let (gl, shader_version, window, mut events_loop, _context) = {
+        let (gl, shader_version, window, mut events_loop, context) = {
             let sdl = sdl2::init().unwrap();
             let video = sdl.video().unwrap();
 
@@ -29,9 +30,9 @@ fn main()
         let program = gl.create_program().expect("Cannot create program");
 
         let vertex_shader_source =
-            std::fs::read_to_string("src/gpu/hello.vert.glsl").expect("Failed to open GLSL shader file");
+            std::fs::read_to_string("res/gpu/hello.vert.glsl").expect("Failed to open GLSL shader file");
         let fragment_shader_source =
-            std::fs::read_to_string("src/gpu/hello.frag.glsl").expect("Failed to open GLSL shader file");
+            std::fs::read_to_string("res/gpu/hello.frag.glsl").expect("Failed to open GLSL shader file");
 
         let shader_sources =
             [(glow::VERTEX_SHADER, vertex_shader_source), (glow::FRAGMENT_SHADER, fragment_shader_source)];
@@ -67,6 +68,61 @@ fn main()
 
         gl.clear_color(0.1, 0.2, 0.3, 1.0);
 
+        let image = image::open("res/img/Crate.png").unwrap();
+        let width = image.width();
+        let height = image.height();
+        let data = image.into_rgba8();
+        let data2 = data.into_vec();
+
+        println!("{:?}", &data2[.. 4]);
+
+        let texture = gl.create_texture().unwrap();
+
+        gl.bind_texture(glow::TEXTURE_2D, Some(texture));
+
+        #[rustfmt::skip]
+        let image_data = [
+            // R, G, B, A
+            255, 255, 255,
+            0, 255, 0,
+            255, 0, 0,
+            255, 255, 255,
+            0, 0, 255,
+        ];
+
+        gl.tex_image_2d(
+            glow::TEXTURE_2D,
+            0,
+            glow::RGB as i32,
+            2,
+            2,
+            0,
+            glow::RGB,
+            glow::UNSIGNED_BYTE,
+            Some(&image_data),
+        );
+
+        // gl.tex_image_2d(
+        //     glow::TEXTURE_2D,
+        //     0,
+        //     glow::RGBA as i32,
+        //     width as i32,
+        //     height as i32,
+        //     0,
+        //     glow::RGBA,
+        //     glow::UNSIGNED_BYTE,
+        //     Some(&data2),
+        // );
+
+        // let err = gl.get_error();
+        // if err != glow::NO_ERROR
+        // {
+        //     gl.get_gl_error(err);
+        // }
+
+        // To stop using the texture
+        // gl.bind_texture(glow::TEXTURE_2D, None);
+
         let mut running = true;
         while running
         {
@@ -93,6 +149,9 @@ fn main()
             let orthographic_projection_matrix =
                 glam::f32::Mat4::orthographic_rh(0.0, window.size().0 as f32, window.size().1 as f32, 0.0, -1.0, 1.0);
 
+            gl.active_texture(glow::TEXTURE0);
+            gl.bind_texture(glow::TEXTURE_2D, Some(texture));
+
             draw_quad(
                 &gl,
                 program,
@@ -114,8 +173,8 @@ fn main()
             draw_quad(
                 &gl,
                 program,
-                glam::vec2(96.0, 96.0),
-                glam::vec2(64.0, 64.0),
+                glam::vec2(640.0, 300.0),
+                glam::vec2(512.0, 256.0),
                 glam::vec4(0.0, 0.6, 1.0, 1.0),
                 orthographic_projection_matrix,
             );
