@@ -1,6 +1,6 @@
 use glam;
 use glow::*;
-use image::GenericImageView;
+use glow_glyph::{ab_glyph, GlyphBrushBuilder, Section, Text};
 use sdl2::event::{Event, WindowEvent};
 use sdl2::keyboard::Keycode;
 
@@ -96,27 +96,10 @@ fn main()
         );
 
         gl.generate_mipmap(glow::TEXTURE_2D);
+        gl.bind_texture(glow::TEXTURE_2D, None);
 
-        // gl.tex_image_2d(
-        //     glow::TEXTURE_2D,
-        //     0,
-        //     glow::RGBA as i32,
-        //     width as i32,
-        //     height as i32,
-        //     0,
-        //     glow::RGBA,
-        //     glow::UNSIGNED_BYTE,
-        //     Some(&data2),
-        // );
-
-        // let err = gl.get_error();
-        // if err != glow::NO_ERROR
-        // {
-        //     gl.get_gl_error(err);
-        // }
-
-        // To stop using the texture
-        // gl.bind_texture(glow::TEXTURE_2D, None);
+        let font = ab_glyph::FontArc::try_from_slice(include_bytes!("../res/font/Roboto/Roboto-Regular.ttf")).unwrap();
+        let mut glyph_brush = GlyphBrushBuilder::using_font(font).build(&gl);
 
         let mut running = true;
         while running
@@ -147,6 +130,8 @@ fn main()
             let orthographic_projection_matrix =
                 glam::f32::Mat4::orthographic_rh(0.0, window_width, window_height, 0.0, -1.0, 1.0);
 
+            gl.use_program(Some(program));
+
             draw_quad(
                 &gl,
                 program,
@@ -175,6 +160,29 @@ fn main()
                 orthographic_projection_matrix,
                 texture,
             );
+
+            glyph_brush.queue(Section {
+                screen_position: (30.0, 30.0),
+                bounds: (window_width, window_height),
+                text: vec![Text::default()
+                    .with_text("Hello glow_glyph!")
+                    .with_color([0.0, 0.0, 0.0, 1.0])
+                    .with_scale(40.0)],
+                ..Section::default()
+            });
+
+            glyph_brush.queue(Section {
+                screen_position: (30.0, 90.0),
+                bounds: (window_width, window_height),
+                text: vec![Text::default()
+                    .with_text("Hello glow_glyph!")
+                    .with_color([1.0, 1.0, 1.0, 1.0])
+                    .with_scale(40.0)],
+                ..Section::default()
+            });
+
+            // Draw the text!
+            glyph_brush.draw_queued(&gl, window_width as u32, window_height as u32).expect("Draw queued");
 
             window.gl_swap_window();
 
