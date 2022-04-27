@@ -134,28 +134,34 @@ struct Tile
 struct Camera2D
 {
     position: glam::Vec2,
+    viewport: glam::Vec2,
 }
 
 impl Camera2D
 {
     fn new() -> Self
     {
-        Self { position: glam::Vec2::ZERO }
+        Self { position: glam::Vec2::ZERO, viewport: glam::Vec2::ZERO }
+    }
+
+    fn update_viewport_dimensions(&mut self, window_width: f32, window_height: f32)
+    {
+        self.viewport = glam::vec2(window_width, window_height);
     }
 
     /// Useful for drawing items that should not move along with navigation.
-    fn get_origin_matrix(&self, window_width: f32, window_height: f32) -> glam::Mat4
+    fn get_origin_matrix(&self) -> glam::Mat4
     {
-        glam::f32::Mat4::orthographic_rh(0.0, window_width, window_height, 0.0, -1.0, 1.0)
+        glam::f32::Mat4::orthographic_rh(0.0, self.viewport.x, self.viewport.y, 0.0, -1.0, 1.0)
     }
 
     /// Useful for drawing items that should move along with navigation.
-    fn get_matrix(&self, window_width: f32, window_height: f32) -> glam::Mat4
+    fn get_matrix(&self) -> glam::Mat4
     {
         glam::f32::Mat4::orthographic_rh(
             self.position.x,
-            self.position.x + window_width,
-            self.position.y + window_height,
+            self.position.x + self.viewport.x,
+            self.position.y + self.viewport.y,
             self.position.y,
             -1.0,
             1.0,
@@ -165,6 +171,26 @@ impl Camera2D
     fn get_position_in_screen_space(&self, position: glam::Vec2) -> glam::Vec2
     {
         position - self.position
+    }
+
+    fn is_rectangle_in_view(&self, rectangle_position: glam::Vec2, rectangle_dimensions: glam::Vec2) -> bool
+    {
+        // Left, Right, Top, Bottom edges = xyzw
+        let a = glam::vec4(
+            rectangle_position.x,
+            rectangle_position.x + rectangle_dimensions.x,
+            rectangle_position.y,
+            rectangle_position.y + rectangle_dimensions.y,
+        );
+
+        let b = glam::vec4(
+            self.position.x,
+            self.position.x + self.viewport.x,
+            self.position.y,
+            self.position.y + self.viewport.y,
+        );
+
+        a.x.max(b.x) < a.y.min(b.y) && a.z.max(b.z) < a.w.min(b.z)
     }
 }
 
@@ -329,7 +355,7 @@ async fn main()
 
             // let orthographic_projection_matrix =
             //     glam::f32::Mat4::orthographic_rh(0.0, window_width, window_height, 0.0, -1.0, 1.0);
-            let orthographic_projection_matrix = camera.get_matrix(window_width, window_height);
+            let orthographic_projection_matrix = camera.get_matrix();
 
             gl.use_program(Some(program));
 
@@ -352,7 +378,7 @@ async fn main()
             );
 
             let logo_dims = glam::vec2(512.0, 256.0);
-            let origin_matrix = camera.get_origin_matrix(window_width, window_height);
+            let origin_matrix = camera.get_origin_matrix();
             draw_quad_textured(
                 &gl,
                 program,
