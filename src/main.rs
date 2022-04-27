@@ -5,12 +5,14 @@ use sdl2::event::{Event, WindowEvent};
 use sdl2::keyboard::Keycode;
 use serde_json::Value;
 
+#[derive(Clone)]
 struct Collection
 {
     name: String,
     videos: Vec<Video>,
 }
 
+#[derive(Clone)]
 struct Video
 {
     name: String,
@@ -31,7 +33,7 @@ fn handle_item(item: &Value, aspect_ratio: f32) -> Video
     let content_type = title_map[item_type];
     let item_name = &item["text"]["title"]["full"][content_type]["default"]["content"];
     let tiles = item["image"]["tile"].as_object().unwrap();
-    let mut ratios = {
+    let ratios = {
         let mut ratios = Vec::<(String, f32)>::new();
         for tile in tiles.keys()
         {
@@ -41,9 +43,6 @@ fn handle_item(item: &Value, aspect_ratio: f32) -> Video
         }
         ratios
     };
-
-    // ratios.sort_by(|a, b| (a.1 - aspect_ratio).abs().partial_cmp(&(b.1 -
-    // aspect_ratio).abs()).unwrap());
 
     let closest_aspect_ratio = ratios
         .into_iter()
@@ -61,26 +60,23 @@ fn handle_item(item: &Value, aspect_ratio: f32) -> Video
         &appropriate_tiles[content_type]["default"]["url"]
     };
 
-    println!("{}: {}", item_name, tile_url);
+    // println!("{}: {}", item_name, tile_url);
 
     Video { name: item_name.to_string(), url: tile_url.to_string() }
 }
 
-#[tokio::main]
-async fn main()
+async fn get_collections(aspect_ratio: f32) -> Vec<Collection>
 {
-    // !!!!!!!!!!!!!!!!!!!!!!!!! tokio::yield_now();
-
-    let aspect_ratio = 1080.0 / 1920.0;
-
     let body =
         reqwest::get("https://cd-static.bamgrid.com/dp-117731241344/home.json").await.unwrap().text().await.unwrap();
 
     let json: Value = serde_json::from_str(&body).unwrap();
 
+    let mut collections = Vec::new();
+
     if let Value::Array(containers) = &json["data"]["StandardCollection"]["containers"]
     {
-        let mut collections = Vec::with_capacity(containers.len());
+        collections.reserve(containers.len());
 
         for container in containers
         {
@@ -117,14 +113,22 @@ async fn main()
                 }
             }
 
-            collections.push(container);
+            collections.push(collection);
         }
     }
 
-    if true
-    {
-        return;
-    }
+    collections
+}
+
+#[tokio::main]
+async fn main()
+{
+    // !!!!!!!!!!!!!!!!!!!!!!!!! tokio::yield_now();
+
+    let aspect_ratio = 1080.0 / 1920.0;
+
+    let collections_future = get_collections(aspect_ratio);
+    tokio::pin!(collections_future);
 
     unsafe {
         let (gl, shader_version, window, mut events_loop, _context) = {
@@ -223,8 +227,26 @@ async fn main()
         let mut running = true;
         let time_counter_milliseconds = std::time::Instant::now();
 
+        let mut collections = None;
+
         while running
         {
+            let timeout = tokio::time::sleep(tokio::time::Duration::from_millis(10));
+            tokio::pin!(timeout);
+
+            if !collections.is_some()
+            {
+                tokio::select! {
+                    _ = &mut timeout => (),
+                    collections_results = &mut collections_future =>
+                    {
+                        println!("HTTP Request completed! Len: {}", collections_results.len());
+
+                        collections = Some(collections_results);
+                    },
+                };
+            }
+
             let time_milliseconds = time_counter_milliseconds.elapsed().as_millis() as f32 / 1000.0;
 
             for event in events_loop.poll_iter()
