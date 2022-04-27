@@ -24,17 +24,24 @@ for container in js:
         for item in set_['items']:
             item_type = item['type']
             name_from = item['text']['title']['full']
-            name = name_from[title_map[item_type]]['default']['content']
-
-            available_aspect_ratios = list(item['image']['tile'])
-
-            ratios = list([i, float(i)] for i in item['image']['tile'])
-
+            content_type = title_map[item_type]
+            name = name_from[content_type]['default']['content']
+            tiles = item['image']['tile']
+            available_aspect_ratios = list(tiles)
+            ratios = list([i, float(i)] for i in tiles)
             ratios.sort(key=lambda x: abs(x[1] - ASPECT_RATIO))
-
             closest_aspect_ratio = ratios[0][0]
 
-            print('   ', name, closest_aspect_ratio)
+            if content_type not in tiles[closest_aspect_ratio]:
+                tile_url = (
+                    tiles[closest_aspect_ratio]['default']['default']['url']
+                )
+            else:
+                tile_url = (
+                    tiles[closest_aspect_ratio][content_type]['default']['url']
+                )
+
+            print('   ', name, f'"{tile_url[:15]}..."')
 
             # slug_from = item['text']['title']['slug']
             # slug = name_from[title_map[item_type]]['default']['content']
