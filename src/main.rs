@@ -1,11 +1,21 @@
-use std::time::{SystemTime, UNIX_EPOCH};
-
 use glam;
 use glow::*;
 use glow_glyph::{ab_glyph, GlyphBrushBuilder, Section, Text};
 use sdl2::event::{Event, WindowEvent};
 use sdl2::keyboard::Keycode;
 use serde_json::Value;
+
+struct Collection
+{
+    name: String,
+    videos: Vec<Video>,
+}
+
+struct Video
+{
+    name: String,
+    url: String,
+}
 
 #[tokio::main]
 async fn main()
@@ -15,9 +25,18 @@ async fn main()
 
     let json: Value = serde_json::from_str(&body).unwrap();
 
-    if let Value::Array(values) = &json["data"]["StandardCollection"]["containers"]
+    if let Value::Array(containers) = &json["data"]["StandardCollection"]["containers"]
     {
-        println!("{}", values.len());
+        let mut collections = Vec::with_capacity(containers.len());
+
+        for container in containers
+        {
+            let set = &container["set"];
+            let set_name = &set["text"]["title"]["full"]["set"]["default"]["content"];
+            let collection = Collection { name: set_name.to_owned().as_str().unwrap().to_string(), videos: Vec::new() };
+
+            collections.push(container);
+        }
     }
 
     if true
