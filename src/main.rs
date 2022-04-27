@@ -17,9 +17,62 @@ struct Video
     url: String,
 }
 
+fn handle_item(item: &Value, aspect_ratio: f32) -> Video
+{
+    let title_map = {
+        let mut title_map = std::collections::HashMap::new();
+        title_map.insert("DmcSeries", "series");
+        title_map.insert("DmcVideo", "program");
+        title_map.insert("StandardCollection", "collection");
+        title_map
+    };
+
+    let item_type = &item["type"].as_str().unwrap();
+    let content_type = title_map[item_type];
+    let item_name = &item["text"]["title"]["full"][content_type]["default"]["content"];
+    let tiles = item["image"]["tile"].as_object().unwrap();
+    let mut ratios = {
+        let mut ratios = Vec::<(String, f32)>::new();
+        for tile in tiles.keys()
+        {
+            let tile_string = tile.to_string();
+            let tile_value = tile_string.parse().unwrap();
+            ratios.push((tile_string, tile_value));
+        }
+        ratios
+    };
+
+    // ratios.sort_by(|a, b| (a.1 - aspect_ratio).abs().partial_cmp(&(b.1 -
+    // aspect_ratio).abs()).unwrap());
+
+    let closest_aspect_ratio = ratios
+        .into_iter()
+        .min_by(|a, b| (a.1 - aspect_ratio).abs().partial_cmp(&(b.1 - aspect_ratio).abs()).unwrap())
+        .unwrap();
+
+    let appropriate_tiles = &tiles[&closest_aspect_ratio.0].as_object().unwrap();
+
+    let tile_url = if !appropriate_tiles.contains_key(content_type)
+    {
+        &appropriate_tiles["default"]["default"]["url"]
+    }
+    else
+    {
+        &appropriate_tiles[content_type]["default"]["url"]
+    };
+
+    println!("{}: {}", item_name, tile_url);
+
+    Video { name: item_name.to_string(), url: tile_url.to_string() }
+}
+
 #[tokio::main]
 async fn main()
 {
+    // !!!!!!!!!!!!!!!!!!!!!!!!! tokio::yield_now();
+
+    let aspect_ratio = 1080.0 / 1920.0;
+
     let body =
         reqwest::get("https://cd-static.bamgrid.com/dp-117731241344/home.json").await.unwrap().text().await.unwrap();
 
@@ -33,7 +86,36 @@ async fn main()
         {
             let set = &container["set"];
             let set_name = &set["text"]["title"]["full"]["set"]["default"]["content"];
-            let collection = Collection { name: set_name.to_owned().as_str().unwrap().to_string(), videos: Vec::new() };
+            let mut collection =
+                Collection { name: set_name.to_owned().as_str().unwrap().to_string(), videos: Vec::new() };
+
+            if set["type"].as_str().unwrap() == "CuratedSet"
+            {
+                for item in set["items"].as_array().unwrap()
+                {
+                    collection.videos.push(handle_item(item, aspect_ratio));
+                }
+            }
+            else
+            {
+                let ref_id = &set["refId"].as_str().unwrap();
+
+                let body = reqwest::get(format!("https://cd-static.bamgrid.com/dp-117731241344/sets/{ref_id}.json"))
+                    .await
+                    .unwrap()
+                    .text()
+                    .await
+                    .unwrap();
+
+                let json: Value = serde_json::from_str(&body).unwrap();
+
+                let set = json["data"].as_object().unwrap().values().take(1).next().unwrap();
+
+                for item in set["items"].as_array().unwrap()
+                {
+                    collection.videos.push(handle_item(item, aspect_ratio));
+                }
+            }
 
             collections.push(container);
         }
