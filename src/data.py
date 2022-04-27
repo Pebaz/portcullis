@@ -1,4 +1,5 @@
 import json
+import requests
 
 js = json.load(open('home.json'))['data']['StandardCollection']['containers']
 
@@ -45,9 +46,29 @@ for container in js:
 
             # slug_from = item['text']['title']['slug']
             # slug = name_from[title_map[item_type]]['default']['content']
+    else:
+        ref_id = set_['refId']
+        request = requests.get(
+            f'https://cd-static.bamgrid.com/dp-117731241344/sets/{ref_id}.json'
+        )
 
+        try:
+            items = request.json()['data'][set_['contentClass']]
+        except:
+            print(set_.keys(), set_['contentClass'], set_['refIdType'], set_['refType'], set_['type'])
+            print(request.json()['data'].keys())
+            print(set_)
+            print()
+            raise
 
-            # image =
-
-            # print('   ', name, '->', image)
-            # print('   ', name, f'"{slug}"')
+        for item in items['items']:
+            item_type = item['type']
+            name_from = item['text']['title']['full']
+            content_type = title_map[item_type]
+            name = name_from[content_type]['default']['content']
+            tiles = item['image']['tile']
+            available_aspect_ratios = list(tiles)
+            ratios = list([i, float(i)] for i in tiles)
+            ratios.sort(key=lambda x: abs(x[1] - ASPECT_RATIO))
+            closest_aspect_ratio = ratios[0][0]
+            break
