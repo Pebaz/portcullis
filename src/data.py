@@ -51,15 +51,10 @@ for container in js:
         request = requests.get(
             f'https://cd-static.bamgrid.com/dp-117731241344/sets/{ref_id}.json'
         )
+        data = request.json()['data']
+        items = list(data.values())[0]
 
-        try:
-            items = request.json()['data'][set_['contentClass']]
-        except:
-            print(set_.keys(), set_['contentClass'], set_['refIdType'], set_['refType'], set_['type'])
-            print(request.json()['data'].keys())
-            print(set_)
-            print()
-            raise
+        assert len(data.keys()) == 1
 
         for item in items['items']:
             item_type = item['type']
@@ -71,4 +66,14 @@ for container in js:
             ratios = list([i, float(i)] for i in tiles)
             ratios.sort(key=lambda x: abs(x[1] - ASPECT_RATIO))
             closest_aspect_ratio = ratios[0][0]
-            break
+
+            if content_type not in tiles[closest_aspect_ratio]:
+                tile_url = (
+                    tiles[closest_aspect_ratio]['default']['default']['url']
+                )
+            else:
+                tile_url = (
+                    tiles[closest_aspect_ratio][content_type]['default']['url']
+                )
+
+            print('   ', name, f'"{tile_url[:15]}..."')
