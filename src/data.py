@@ -13,6 +13,28 @@ SCREEN_WIDTH = 1920
 SCREEN_HEIGHT = 1080
 ASPECT_RATIO = SCREEN_HEIGHT / SCREEN_WIDTH
 
+def handle_item(item):
+    item_type = item['type']
+    name_from = item['text']['title']['full']
+    content_type = title_map[item_type]
+    name = name_from[content_type]['default']['content']
+    tiles = item['image']['tile']
+    available_aspect_ratios = list(tiles)
+    ratios = list([i, float(i)] for i in tiles)
+    ratios.sort(key=lambda x: abs(x[1] - ASPECT_RATIO))
+    closest_aspect_ratio = ratios[0][0]
+
+    if content_type not in tiles[closest_aspect_ratio]:
+        tile_url = (
+            tiles[closest_aspect_ratio]['default']['default']['url']
+        )
+    else:
+        tile_url = (
+            tiles[closest_aspect_ratio][content_type]['default']['url']
+        )
+
+    print('   ', name, f'"{tile_url[:15]}..."')
+
 for container in js:
     set_ = container['set']
 
@@ -23,29 +45,8 @@ for container in js:
 
     if set_['type'] == 'CuratedSet':
         for item in set_['items']:
-            item_type = item['type']
-            name_from = item['text']['title']['full']
-            content_type = title_map[item_type]
-            name = name_from[content_type]['default']['content']
-            tiles = item['image']['tile']
-            available_aspect_ratios = list(tiles)
-            ratios = list([i, float(i)] for i in tiles)
-            ratios.sort(key=lambda x: abs(x[1] - ASPECT_RATIO))
-            closest_aspect_ratio = ratios[0][0]
+            handle_item(item)
 
-            if content_type not in tiles[closest_aspect_ratio]:
-                tile_url = (
-                    tiles[closest_aspect_ratio]['default']['default']['url']
-                )
-            else:
-                tile_url = (
-                    tiles[closest_aspect_ratio][content_type]['default']['url']
-                )
-
-            print('   ', name, f'"{tile_url[:15]}..."')
-
-            # slug_from = item['text']['title']['slug']
-            # slug = name_from[title_map[item_type]]['default']['content']
     else:
         ref_id = set_['refId']
         request = requests.get(
@@ -57,23 +58,4 @@ for container in js:
         assert len(data.keys()) == 1
 
         for item in items['items']:
-            item_type = item['type']
-            name_from = item['text']['title']['full']
-            content_type = title_map[item_type]
-            name = name_from[content_type]['default']['content']
-            tiles = item['image']['tile']
-            available_aspect_ratios = list(tiles)
-            ratios = list([i, float(i)] for i in tiles)
-            ratios.sort(key=lambda x: abs(x[1] - ASPECT_RATIO))
-            closest_aspect_ratio = ratios[0][0]
-
-            if content_type not in tiles[closest_aspect_ratio]:
-                tile_url = (
-                    tiles[closest_aspect_ratio]['default']['default']['url']
-                )
-            else:
-                tile_url = (
-                    tiles[closest_aspect_ratio][content_type]['default']['url']
-                )
-
-            print('   ', name, f'"{tile_url[:15]}..."')
+            handle_item(item)
