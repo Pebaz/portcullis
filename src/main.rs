@@ -298,7 +298,7 @@ async fn main()
         let collections_future = get_collections(aspect_ratio);
         tokio::pin!(collections_future);
 
-        let mut selection = glam::UVec2::ZERO;
+        let mut selection = glam::IVec2::ZERO;
 
         while running
         {
@@ -327,10 +327,63 @@ async fn main()
                 {
                     Event::Quit { .. } => running = false,
                     Event::KeyDown { keycode: Some(Keycode::Escape), .. } => running = false,
-                    Event::KeyDown { keycode: Some(Keycode::Right), .. } => camera.position.x -= 64.0,
-                    Event::KeyDown { keycode: Some(Keycode::Left), .. } => camera.position.x += 64.0,
-                    Event::KeyDown { keycode: Some(Keycode::Down), .. } => camera.position.y += 64.0,
-                    Event::KeyDown { keycode: Some(Keycode::Up), .. } => camera.position.y -= 64.0,
+                    Event::KeyDown { keycode: Some(Keycode::D), .. } => camera.position.x -= 64.0,
+                    Event::KeyDown { keycode: Some(Keycode::A), .. } => camera.position.x += 64.0,
+                    Event::KeyDown { keycode: Some(Keycode::S), .. } => camera.position.y += 64.0,
+                    Event::KeyDown { keycode: Some(Keycode::W), .. } => camera.position.y -= 64.0,
+
+                    Event::KeyDown { keycode: Some(Keycode::Right), .. } =>
+                    {
+                        if let Some(ref collections) = collections
+                        {
+                            selection.x += 1;
+
+                            if selection.x >= collections[selection.y as usize].videos.len() as i32
+                            {
+                                selection.x = 0;
+                            }
+                        }
+                    }
+
+                    Event::KeyDown { keycode: Some(Keycode::Left), .. } =>
+                    {
+                        if let Some(ref collections) = collections
+                        {
+                            selection.x -= 1;
+
+                            if selection.x < 0
+                            {
+                                selection.x = collections[selection.y as usize].videos.len() as i32 - 1;
+                            }
+                        }
+                    }
+
+                    Event::KeyDown { keycode: Some(Keycode::Down), .. } =>
+                    {
+                        if let Some(ref collections) = collections
+                        {
+                            selection.y += 1;
+
+                            if selection.y >= collections.len() as i32
+                            {
+                                selection.y = 0;
+                            }
+                        }
+                    }
+
+                    Event::KeyDown { keycode: Some(Keycode::Up), .. } =>
+                    {
+                        if let Some(ref collections) = collections
+                        {
+                            selection.y -= 1;
+
+                            if selection.y < 0
+                            {
+                                selection.y = collections.len() as i32 - 1;
+                            }
+                        }
+                    }
+
                     Event::Window { win_event, .. } =>
                     {
                         if let WindowEvent::Resized(width, height) = win_event
@@ -452,11 +505,12 @@ unsafe fn draw_all_collections(
     program: NativeProgram,
     camera: &Camera2D,
     glyph_brush: &mut glow_glyph::GlyphBrush,
-    selection: glam::UVec2,
+    selection: glam::IVec2,
 )
 {
     let row_height = camera.viewport.y / 4.0;
     let title_height = row_height / 5.0;
+    let num_collections = collections.len();
 
     for (row, collection) in collections.iter().enumerate()
     {
@@ -475,9 +529,13 @@ unsafe fn draw_all_collections(
         let col_margin = col_cell_width / 6.0;
         let both_sides = 2.0;
         let col_width = col_cell_width + col_margin * both_sides;
+        let num_videos = collection.videos.len();
 
         for (col, video) in collection.videos.iter().enumerate()
         {
+            // let logical_selection = selection % glam::ivec2(num_collections as i32, num_videos as i32);
+
+            let selected = glam::ivec2(col as i32, row as i32) == selection;
             let col_y = row_y + title_height;
             let col_x = col as f32 * col_width;
             let position = glam::vec2(col_x, col_y);
@@ -485,6 +543,18 @@ unsafe fn draw_all_collections(
 
             if camera.is_rectangle_in_view(position, dimensions)
             {
+                if selected
+                {
+                    draw_quad(
+                        &gl,
+                        program,
+                        position - glam::vec2(16.0, 16.0),
+                        dimensions + (glam::vec2(16.0, 16.0) * 2.0),
+                        glam::vec4(1.0, 1.0, 1.0, 0.75),
+                        camera.get_matrix(),
+                    );
+                }
+
                 draw_quad(&gl, program, position, dimensions, glam::vec4(1.0, 0.6, 0.0, 0.5), camera.get_matrix());
             }
         }
