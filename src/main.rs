@@ -298,7 +298,7 @@ async fn main()
         let collections_future = get_collections(aspect_ratio);
         tokio::pin!(collections_future);
 
-        let mut selection = glam::IVec2::ZERO;
+        let mut selection = glam::Vec2::ZERO;
 
         while running
         {
@@ -336,11 +336,11 @@ async fn main()
                     {
                         if let Some(ref collections) = collections
                         {
-                            selection.x += 1;
+                            selection.x += 1.0;
 
-                            if selection.x >= collections[selection.y as usize].videos.len() as i32
+                            if selection.x as i32 >= collections[selection.y as usize].videos.len() as i32
                             {
-                                selection.x = 0;
+                                selection.x = 0.0;
                             }
                         }
                     }
@@ -349,11 +349,11 @@ async fn main()
                     {
                         if let Some(ref collections) = collections
                         {
-                            selection.x -= 1;
+                            selection.x -= 1.0;
 
-                            if selection.x < 0
+                            if selection.x < 0.0
                             {
-                                selection.x = collections[selection.y as usize].videos.len() as i32 - 1;
+                                selection.x = collections[selection.y as usize].videos.len() as f32 - 1.0;
                             }
                         }
                     }
@@ -362,11 +362,11 @@ async fn main()
                     {
                         if let Some(ref collections) = collections
                         {
-                            selection.y += 1;
+                            selection.y += 1.0;
 
-                            if selection.y >= collections.len() as i32
+                            if selection.y >= collections.len() as f32
                             {
-                                selection.y = 0;
+                                selection.y = 0.0;
                             }
                         }
                     }
@@ -375,11 +375,11 @@ async fn main()
                     {
                         if let Some(ref collections) = collections
                         {
-                            selection.y -= 1;
+                            selection.y -= 1.0;
 
-                            if selection.y < 0
+                            if selection.y < 0.0
                             {
-                                selection.y = collections.len() as i32 - 1;
+                                selection.y = collections.len() as f32 - 1.0;
                             }
                         }
                     }
@@ -505,12 +505,11 @@ unsafe fn draw_all_collections(
     program: NativeProgram,
     camera: &Camera2D,
     glyph_brush: &mut glow_glyph::GlyphBrush,
-    selection: glam::IVec2,
+    selection: glam::Vec2,
 )
 {
     let row_height = camera.viewport.y / 4.0;
     let title_height = row_height / 5.0;
-    let num_collections = collections.len();
 
     for (row, collection) in collections.iter().enumerate()
     {
@@ -529,15 +528,15 @@ unsafe fn draw_all_collections(
         let col_margin = col_cell_width / 6.0;
         let both_sides = 2.0;
         let col_width = col_cell_width + col_margin * both_sides;
-        let num_videos = collection.videos.len();
 
-        for (col, video) in collection.videos.iter().enumerate()
+        let row_selected = row as i32 == selection.y as i32;
+
+        for (col, _video) in collection.videos.iter().enumerate()
         {
-            // let logical_selection = selection % glam::ivec2(num_collections as i32, num_videos as i32);
-
-            let selected = glam::ivec2(col as i32, row as i32) == selection;
+            let selected = glam::ivec2(col as i32, row as i32) == selection.as_ivec2();
             let col_y = row_y + title_height;
-            let col_x = col as f32 * col_width;
+            let selection_offset_x = if row_selected { selection.x * col_width } else { 0.0 };
+            let col_x = col as f32 * col_width - selection_offset_x;
             let position = glam::vec2(col_x, col_y);
             let dimensions = glam::vec2(col_margin + col_cell_width, row_height - title_height);
 
