@@ -194,15 +194,13 @@ impl Camera2D
     }
 }
 
+const STARTING_WINDOW_WIDTH: f32 = 1024.0;
+const STARTING_WINDOW_HEIGHT: f32 = 768.0;
+
 #[tokio::main]
 async fn main()
 {
     // !!!!!!!!!!!!!!!!!!!!!!!!! tokio::yield_now();
-
-    let aspect_ratio = 1080.0 / 1920.0;
-
-    let collections_future = get_collections(aspect_ratio);
-    tokio::pin!(collections_future);
 
     unsafe {
         let (gl, shader_version, window, mut events_loop, _context) = {
@@ -213,7 +211,12 @@ async fn main()
             gl_attr.set_context_profile(sdl2::video::GLProfile::Core);
             gl_attr.set_context_version(3, 0);
 
-            let window = video.window("Portcullis", 1024, 768).opengl().resizable().build().unwrap();
+            let window = video
+                .window("Portcullis", STARTING_WINDOW_WIDTH as u32, STARTING_WINDOW_HEIGHT as u32)
+                .opengl()
+                .resizable()
+                .build()
+                .unwrap();
             let gl_context = window.gl_create_context().unwrap();
             let gl = glow::Context::from_loader_function(|s| video.gl_get_proc_address(s) as *const _);
             let event_loop = sdl.event_pump().unwrap();
@@ -267,7 +270,8 @@ async fn main()
 
         gl.clear_color(0.1, 0.2, 0.3, 1.0);
 
-        let image = image::open("res/img/Disney-Logo.png").unwrap();
+        // let image = image::open("res/img/Disney-Logo.png").unwrap();
+        let image = image::open("res/logo/Portcullis.png").unwrap();
         let width = image.width();
         let height = image.height();
         let data = image.into_rgba8();
@@ -304,6 +308,12 @@ async fn main()
         let mut collections = None;
 
         let mut camera = Camera2D::new();
+        camera.update_viewport_dimensions(STARTING_WINDOW_WIDTH, STARTING_WINDOW_HEIGHT);
+
+        let aspect_ratio = STARTING_WINDOW_HEIGHT / STARTING_WINDOW_WIDTH;
+
+        let collections_future = get_collections(aspect_ratio);
+        tokio::pin!(collections_future);
 
         while running
         {
@@ -340,6 +350,7 @@ async fn main()
                     {
                         if let WindowEvent::Resized(width, height) = win_event
                         {
+                            camera.update_viewport_dimensions(width as f32, height as f32);
                             gl.viewport(0, 0, width, height);
                         }
                     }
