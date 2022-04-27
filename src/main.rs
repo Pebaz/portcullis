@@ -120,6 +120,54 @@ async fn get_collections(aspect_ratio: f32) -> Vec<Collection>
     collections
 }
 
+struct TextureLibrary
+{
+    textures: std::collections::HashMap<String, NativeTexture>,
+    // asset_load_futures: Vec<dyn std::future::Future<Output = ()>>,
+}
+
+struct Tile
+{
+    texture: NativeTexture,
+}
+
+struct Camera2D
+{
+    position: glam::Vec2,
+}
+
+impl Camera2D
+{
+    fn new() -> Self
+    {
+        Self { position: glam::Vec2::ZERO }
+    }
+
+    /// Useful for drawing items that should not move along with navigation.
+    fn get_origin_matrix(&self, window_width: f32, window_height: f32) -> glam::Mat4
+    {
+        glam::f32::Mat4::orthographic_rh(0.0, window_width, window_height, 0.0, -1.0, 1.0)
+    }
+
+    /// Useful for drawing items that should move along with navigation.
+    fn get_matrix(&self, window_width: f32, window_height: f32) -> glam::Mat4
+    {
+        glam::f32::Mat4::orthographic_rh(
+            self.position.x,
+            self.position.x + window_width,
+            self.position.y + window_height,
+            self.position.y,
+            -1.0,
+            1.0,
+        )
+    }
+
+    fn get_position_in_screen_space(&self, position: glam::Vec2) -> glam::Vec2
+    {
+        position - self.position
+    }
+}
+
 #[tokio::main]
 async fn main()
 {
@@ -229,8 +277,11 @@ async fn main()
 
         let mut collections = None;
 
+        let mut camera = Camera2D::new();
+
         while running
         {
+            // Only using 62% of the frame budget of 16 ms at 60 FPS
             let timeout = tokio::time::sleep(tokio::time::Duration::from_millis(10));
             tokio::pin!(timeout);
 
@@ -255,6 +306,10 @@ async fn main()
                 {
                     Event::Quit { .. } => running = false,
                     Event::KeyDown { keycode: Some(Keycode::Escape), .. } => running = false,
+                    Event::KeyDown { keycode: Some(Keycode::Right), .. } => camera.position.x -= 64.0,
+                    Event::KeyDown { keycode: Some(Keycode::Left), .. } => camera.position.x += 64.0,
+                    Event::KeyDown { keycode: Some(Keycode::Down), .. } => camera.position.y += 64.0,
+                    Event::KeyDown { keycode: Some(Keycode::Up), .. } => camera.position.y -= 64.0,
                     Event::Window { win_event, .. } =>
                     {
                         if let WindowEvent::Resized(width, height) = win_event
@@ -272,8 +327,9 @@ async fn main()
 
             gl.clear(glow::COLOR_BUFFER_BIT);
 
-            let orthographic_projection_matrix =
-                glam::f32::Mat4::orthographic_rh(0.0, window_width, window_height, 0.0, -1.0, 1.0);
+            // let orthographic_projection_matrix =
+            //     glam::f32::Mat4::orthographic_rh(0.0, window_width, window_height, 0.0, -1.0, 1.0);
+            let orthographic_projection_matrix = camera.get_matrix(window_width, window_height);
 
             gl.use_program(Some(program));
 
@@ -296,18 +352,19 @@ async fn main()
             );
 
             let logo_dims = glam::vec2(512.0, 256.0);
+            let origin_matrix = camera.get_origin_matrix(window_width, window_height);
             draw_quad_textured(
                 &gl,
                 program,
                 glam::vec2(window_width / 2.0 - (logo_dims.x / 2.0), window_height / 2.0 - (logo_dims.y / 2.0)),
                 logo_dims,
                 glam::vec4(1.0, 1.0, 1.0, 1.0),
-                orthographic_projection_matrix,
+                origin_matrix,
                 texture,
             );
 
             glyph_brush.queue(Section {
-                screen_position: (30.0, 30.0),
+                screen_position: camera.get_position_in_screen_space(glam::vec2(30.0, 30.0)).into(),
                 bounds: (window_width, window_height),
                 text: vec![Text::default()
                     .with_text("Hello glow_glyph!")
@@ -317,7 +374,7 @@ async fn main()
             });
 
             glyph_brush.queue(Section {
-                screen_position: (30.0, 90.0),
+                screen_position: camera.get_position_in_screen_space(glam::vec2(30.0, 90.0)).into(),
                 bounds: (window_width, window_height),
                 text: vec![Text::default()
                     .with_text(format!("{}", time_milliseconds).as_str())
