@@ -168,24 +168,12 @@ impl Camera2D
         position - self.position
     }
 
-    fn is_rectangle_in_view(&self, rectangle_position: glam::Vec2, rectangle_dimensions: glam::Vec2) -> bool
+    fn is_rectangle_in_view(&self, position: glam::Vec2, dimensions: glam::Vec2) -> bool
     {
-        // Left, Right, Top, Bottom edges = xyzw
-        let a = glam::vec4(
-            rectangle_position.x,
-            rectangle_position.x + rectangle_dimensions.x,
-            rectangle_position.y,
-            rectangle_position.y + rectangle_dimensions.y,
-        );
-
-        let b = glam::vec4(
-            self.position.x,
-            self.position.x + self.viewport.x,
-            self.position.y,
-            self.position.y + self.viewport.y,
-        );
-
-        a.x.max(b.x) < a.y.min(b.y) && a.z.max(b.z) < a.w.min(b.z)
+        position.x <= (self.position.x + self.viewport.x)
+            && (position.x + dimensions.x) >= self.position.x
+            && position.y <= (self.position.y + self.viewport.y)
+            && (position.y + dimensions.y) >= self.position.y
     }
 }
 
@@ -209,7 +197,7 @@ async fn main()
             let window = video
                 .window("Portcullis", STARTING_WINDOW_WIDTH as u32, STARTING_WINDOW_HEIGHT as u32)
                 .opengl()
-                .resizable()
+                // .resizable() 😭
                 .build()
                 .unwrap();
             let gl_context = window.gl_create_context().unwrap();
@@ -361,29 +349,7 @@ async fn main()
 
             gl.clear(glow::COLOR_BUFFER_BIT);
 
-            // let orthographic_projection_matrix =
-            //     glam::f32::Mat4::orthographic_rh(0.0, window_width, window_height, 0.0, -1.0, 1.0);
-            let orthographic_projection_matrix = camera.get_matrix();
-
             gl.use_program(Some(program));
-
-            draw_quad(
-                &gl,
-                program,
-                glam::vec2(0.0, 0.0),
-                glam::vec2(64.0, 64.0),
-                glam::vec4(0.6, 1.0, 0.0, 1.0),
-                orthographic_projection_matrix,
-            );
-
-            draw_quad(
-                &gl,
-                program,
-                glam::vec2(32.0, 32.0),
-                glam::vec2(64.0, 64.0),
-                glam::vec4(1.0, 0.6, 0.0, 0.5),
-                orthographic_projection_matrix,
-            );
 
             let logo_dims = glam::vec2(512.0, 256.0);
             let origin_matrix = camera.get_origin_matrix();
@@ -398,28 +364,18 @@ async fn main()
             );
 
             glyph_brush.queue(Section {
-                screen_position: camera.get_position_in_screen_space(glam::vec2(30.0, 30.0)).into(),
-                bounds: camera.viewport.into(),
-                text: vec![Text::default()
-                    .with_text("Hello glow_glyph!")
-                    .with_color([0.0, 0.0, 0.0, 1.0])
-                    .with_scale(40.0)],
-                ..Section::default()
-            });
-
-            glyph_brush.queue(Section {
-                screen_position: camera.get_position_in_screen_space(glam::vec2(30.0, 90.0)).into(),
+                screen_position: camera.get_position_in_screen_space(glam::vec2(0.0, 0.0)).into(),
                 bounds: camera.viewport.into(),
                 text: vec![Text::default()
                     .with_text(format!("{}", time_milliseconds).as_str())
                     .with_color([1.0, 1.0, 1.0, 1.0])
-                    .with_scale(40.0)],
+                    .with_scale(12.0)],
                 ..Section::default()
             });
 
             if let Some(ref collections) = collections
             {
-                draw_all_collections(collections, &camera, &mut glyph_brush, selection);
+                draw_all_collections(collections, &gl, program, &camera, &mut glyph_brush, selection);
             }
 
             glyph_brush.draw_queued(&gl, window_width as u32, window_height as u32).expect("Draw queued");
@@ -490,19 +446,21 @@ unsafe fn draw_quad_textured(
     gl.bind_texture(glow::TEXTURE_2D, None);
 }
 
-fn draw_all_collections(
+unsafe fn draw_all_collections(
     collections: &Vec<Collection>,
+    gl: &Context,
+    program: NativeProgram,
     camera: &Camera2D,
     glyph_brush: &mut glow_glyph::GlyphBrush,
     selection: glam::UVec2,
 )
 {
     let row_height = camera.viewport.y / 4.0;
+    let title_height = row_height / 5.0;
 
     for (row, collection) in collections.iter().enumerate()
     {
         let row_y = row as f32 * row_height;
-
         let title = collection.name.as_str();
         let title_section = Section {
             screen_position: camera.get_position_in_screen_space(glam::vec2(30.0, row_y)).into(),
@@ -513,7 +471,37 @@ fn draw_all_collections(
 
         glyph_brush.queue(title_section);
 
+        let col_cell_width = camera.viewport.x / 6.0;
+        let col_margin = col_cell_width / 6.0;
+        let both_sides = 2.0;
+        let col_width = col_cell_width + col_margin * both_sides;
+
         for (col, video) in collection.videos.iter().enumerate()
-        {}
+        {
+            let col_y = row_y + title_height;
+            let col_x = col as f32 * col_width;
+            let position = glam::vec2(col_x, col_y);
+            let dimensions = glam::vec2(col_margin + col_cell_width, row_height - title_height);
+
+            if camera.is_rectangle_in_view(position, dimensions)
+            {
+                draw_quad(&gl, program, position, dimensions, glam::vec4(1.0, 0.6, 0.0, 0.5), camera.get_matrix());
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod test
+{
+    use super::*;
+
+    #[test]
+    fn test()
+    {
+        let camera = Camera2D { position: glam::vec2(0.0, 0.0), viewport: glam::vec2(256.0, 256.0) };
+
+        assert_eq!(camera.is_rectangle_in_view(glam::vec2(0.0, 0.0), glam::vec2(64.0, 64.0)), true);
+        assert_eq!(camera.is_rectangle_in_view(glam::vec2(1000.0, 1000.0), glam::vec2(64.0, 64.0)), false);
     }
 }
