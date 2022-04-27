@@ -19,7 +19,6 @@ def handle_item(item):
     content_type = title_map[item_type]
     name = name_from[content_type]['default']['content']
     tiles = item['image']['tile']
-    available_aspect_ratios = list(tiles)
     ratios = list([i, float(i)] for i in tiles)
     ratios.sort(key=lambda x: abs(x[1] - ASPECT_RATIO))
     closest_aspect_ratio = ratios[0][0]

@@ -5,12 +5,28 @@ use glow::*;
 use glow_glyph::{ab_glyph, GlyphBrushBuilder, Section, Text};
 use sdl2::event::{Event, WindowEvent};
 use sdl2::keyboard::Keycode;
+use serde_json::Value;
 
-fn main()
+#[tokio::main]
+async fn main()
 {
+    let body =
+        reqwest::get("https://cd-static.bamgrid.com/dp-117731241344/home.json").await.unwrap().text().await.unwrap();
+
+    let json: Value = serde_json::from_str(&body).unwrap();
+
+    if let Value::Array(values) = &json["data"]["StandardCollection"]["containers"]
+    {
+        println!("{}", values.len());
+    }
+
+    if true
+    {
+        return;
+    }
+
     unsafe {
-        // Create a context from a sdl2 window
-        let (gl, shader_version, window, mut events_loop, context) = {
+        let (gl, shader_version, window, mut events_loop, _context) = {
             let sdl = sdl2::init().unwrap();
             let video = sdl.video().unwrap();
 
