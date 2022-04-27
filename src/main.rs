@@ -126,11 +126,6 @@ struct TextureLibrary
     // asset_load_futures: Vec<dyn std::future::Future<Output = ()>>,
 }
 
-struct Tile
-{
-    texture: NativeTexture,
-}
-
 struct Camera2D
 {
     position: glam::Vec2,
@@ -315,6 +310,8 @@ async fn main()
         let collections_future = get_collections(aspect_ratio);
         tokio::pin!(collections_future);
 
+        let mut selection = glam::UVec2::ZERO;
+
         while running
         {
             // Only using 62% of the frame budget of 16 ms at 60 FPS
@@ -402,7 +399,7 @@ async fn main()
 
             glyph_brush.queue(Section {
                 screen_position: camera.get_position_in_screen_space(glam::vec2(30.0, 30.0)).into(),
-                bounds: (window_width, window_height),
+                bounds: camera.viewport.into(),
                 text: vec![Text::default()
                     .with_text("Hello glow_glyph!")
                     .with_color([0.0, 0.0, 0.0, 1.0])
@@ -412,13 +409,18 @@ async fn main()
 
             glyph_brush.queue(Section {
                 screen_position: camera.get_position_in_screen_space(glam::vec2(30.0, 90.0)).into(),
-                bounds: (window_width, window_height),
+                bounds: camera.viewport.into(),
                 text: vec![Text::default()
                     .with_text(format!("{}", time_milliseconds).as_str())
                     .with_color([1.0, 1.0, 1.0, 1.0])
                     .with_scale(40.0)],
                 ..Section::default()
             });
+
+            if let Some(ref collections) = collections
+            {
+                draw_all_collections(collections, &camera, &mut glyph_brush, selection);
+            }
 
             glyph_brush.draw_queued(&gl, window_width as u32, window_height as u32).expect("Draw queued");
 
@@ -486,4 +488,32 @@ unsafe fn draw_quad_textured(
     gl.uniform_1_u32(Some(&using_rectangle_texture), 0);
 
     gl.bind_texture(glow::TEXTURE_2D, None);
+}
+
+fn draw_all_collections(
+    collections: &Vec<Collection>,
+    camera: &Camera2D,
+    glyph_brush: &mut glow_glyph::GlyphBrush,
+    selection: glam::UVec2,
+)
+{
+    let row_height = camera.viewport.y / 4.0;
+
+    for (row, collection) in collections.iter().enumerate()
+    {
+        let row_y = row as f32 * row_height;
+
+        let title = collection.name.as_str();
+        let title_section = Section {
+            screen_position: camera.get_position_in_screen_space(glam::vec2(30.0, row_y)).into(),
+            bounds: camera.viewport.into(),
+            text: vec![Text::default().with_text(title).with_color([1.0, 1.0, 1.0, 1.0]).with_scale(40.0)],
+            ..Section::default()
+        };
+
+        glyph_brush.queue(title_section);
+
+        for (col, video) in collection.videos.iter().enumerate()
+        {}
+    }
 }
