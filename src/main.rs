@@ -446,7 +446,8 @@ async fn main()
                         }
                     }
 
-                    Event::KeyDown { keycode: Some(Keycode::Down), .. } if camera_tweens.is_empty() =>
+                    Event::KeyDown { keycode: Some(Keycode::Down), .. }
+                        if camera_tweens.is_empty() && col_tweens.is_empty() =>
                     {
                         if let Some(ref collections) = collections
                         {
@@ -460,13 +461,15 @@ async fn main()
 
                             let col_target = collections[selection.y as usize].selected_video;
 
-                            #[rustfmt::skip]
-                            col_tweens.push_back(
-                                keyframes![
-                                    (col_origin as f32, 0.0f32, functions::EaseInOut),
-                                    (col_target as f32, 0.5f32, functions::EaseInOut)
-                                ]
-                            );
+                            selection.x = col_target as f32;
+
+                            // #[rustfmt::skip]
+                            // col_tweens.push_back(
+                            //     keyframes![
+                            //         (col_origin as f32, 0.0f32, functions::EaseInOut),
+                            //         (col_target as f32, 0.5f32, functions::EaseInOut)
+                            //     ]
+                            // );
 
                             let row_height = camera.viewport.y / 4.0;
                             // camera.position.y = selection.y * row_height;
@@ -484,7 +487,8 @@ async fn main()
                         }
                     }
 
-                    Event::KeyDown { keycode: Some(Keycode::Up), .. } if camera_tweens.is_empty() =>
+                    Event::KeyDown { keycode: Some(Keycode::Up), .. }
+                        if camera_tweens.is_empty() && col_tweens.is_empty() =>
                     {
                         if let Some(ref collections) = collections
                         {
@@ -498,13 +502,15 @@ async fn main()
 
                             let col_target = collections[selection.y as usize].selected_video;
 
-                            #[rustfmt::skip]
-                            col_tweens.push_back(
-                                keyframes![
-                                    (col_origin as f32, 0.0f32, functions::EaseInOut),
-                                    (col_target as f32, 0.5f32, functions::EaseInOut)
-                                ]
-                            );
+                            // #[rustfmt::skip]
+                            // col_tweens.push_back(
+                            //     keyframes![
+                            //         (col_origin as f32, 0.0f32, functions::EaseInOut),
+                            //         (col_target as f32, 0.5f32, functions::EaseInOut)
+                            //     ]
+                            // );
+
+                            selection.x = col_target as f32;
 
                             let row_height = camera.viewport.y / 4.0;
                             // camera.position.y = selection.y * row_height;
@@ -738,7 +744,7 @@ unsafe fn draw_all_collections(
             let selected = row_selected && col as i32 == collection.selected_video;
             let col_y = row_y + title_height;
             let selection_offset_x =
-                if row_selected { selection.x * col_width } else { collection.selected_video as f32 };
+                if row_selected { selection.x * col_width } else { collection.selected_video as f32 * col_width };
             let col_x = col as f32 * col_width - selection_offset_x;
             let position = glam::vec2(col_x, col_y);
             let dimensions = glam::vec2(col_margin + col_cell_width, row_height - title_height);
