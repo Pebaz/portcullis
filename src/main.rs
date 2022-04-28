@@ -10,6 +10,7 @@ struct Collection
 {
     name: String,
     videos: Vec<Video>,
+    selected_video: i32,
 }
 
 #[derive(Clone)]
@@ -82,8 +83,11 @@ async fn get_collections(aspect_ratio: f32) -> Vec<Collection>
         {
             let set = &container["set"];
             let set_name = &set["text"]["title"]["full"]["set"]["default"]["content"];
-            let mut collection =
-                Collection { name: set_name.to_owned().as_str().unwrap().to_string(), videos: Vec::new() };
+            let mut collection = Collection {
+                name: set_name.to_owned().as_str().unwrap().to_string(),
+                videos: Vec::new(),
+                selected_video: 0,
+            };
 
             if set["type"].as_str().unwrap() == "CuratedSet"
             {
@@ -327,33 +331,35 @@ async fn main()
                 {
                     Event::Quit { .. } => running = false,
                     Event::KeyDown { keycode: Some(Keycode::Escape), .. } => running = false,
-                    Event::KeyDown { keycode: Some(Keycode::D), .. } => camera.position.x -= 64.0,
-                    Event::KeyDown { keycode: Some(Keycode::A), .. } => camera.position.x += 64.0,
+                    Event::KeyDown { keycode: Some(Keycode::D), .. } => camera.position.x += 64.0,
+                    Event::KeyDown { keycode: Some(Keycode::A), .. } => camera.position.x -= 64.0,
                     Event::KeyDown { keycode: Some(Keycode::S), .. } => camera.position.y += 64.0,
                     Event::KeyDown { keycode: Some(Keycode::W), .. } => camera.position.y -= 64.0,
 
                     Event::KeyDown { keycode: Some(Keycode::Right), .. } =>
                     {
-                        if let Some(ref collections) = collections
+                        if let Some(ref mut collections) = collections
                         {
-                            selection.x += 1.0;
+                            let index = selection.y as usize;
+                            collections[index].selected_video += 1;
 
-                            if selection.x as i32 >= collections[selection.y as usize].videos.len() as i32
+                            if collections[index].selected_video >= collections[index].videos.len() as i32
                             {
-                                selection.x = 0.0;
+                                collections[index].selected_video = 0;
                             }
                         }
                     }
 
                     Event::KeyDown { keycode: Some(Keycode::Left), .. } =>
                     {
-                        if let Some(ref collections) = collections
+                        if let Some(ref mut collections) = collections
                         {
-                            selection.x -= 1.0;
+                            let index = selection.y as usize;
+                            collections[index].selected_video -= 1;
 
-                            if selection.x < 0.0
+                            if collections[index].selected_video < 0
                             {
-                                selection.x = collections[selection.y as usize].videos.len() as f32 - 1.0;
+                                collections[index].selected_video = collections[index].videos.len() as i32 - 1;
                             }
                         }
                     }
@@ -533,7 +539,8 @@ unsafe fn draw_all_collections(
 
         for (col, _video) in collection.videos.iter().enumerate()
         {
-            let selected = glam::ivec2(col as i32, row as i32) == selection.as_ivec2();
+            // let selected = glam::ivec2(col as i32, row as i32) == selection.as_ivec2();
+            let selected = row_selected && col as i32 == collection.selected_video;
             let col_y = row_y + title_height;
             let selection_offset_x = if row_selected { selection.x * col_width } else { 0.0 };
             let col_x = col as f32 * col_width - selection_offset_x;
