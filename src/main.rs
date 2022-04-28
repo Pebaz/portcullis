@@ -289,22 +289,6 @@ async fn main()
 
         let mut camera_tweens = VecDeque::<AnimationSequence<V2>>::new();
 
-        #[rustfmt::skip]
-        camera_tweens.push_back(
-            keyframes![
-                (V2(0.0, 0.0), 0.0, functions::EaseInOut),
-                (V2(256.0, 0.0), 10.0, functions::EaseInOut)
-            ]
-        );
-
-        #[rustfmt::skip]
-        camera_tweens.push_back(
-            keyframes![
-                (V2(256.0, 0.0), 0.0, functions::EaseInOut),
-                (V2(0.0, 0.0), 4.0, functions::EaseInOut)
-            ]
-        );
-
         while running
         {
             if collections.is_none()
@@ -332,28 +316,28 @@ async fn main()
                 let timeout = tokio::time::sleep(tokio::time::Duration::from_millis(1));
                 tokio::pin!(timeout);
 
-                tokio::select! {
-                    _ = &mut timeout => (),
+                // tokio::select! {
+                //     _ = &mut timeout => (),
 
-                    http_image = current_job =>
-                    {
-                        let url = current_url.take().unwrap();
-                        pending.remove(&url);
+                //     http_image = current_job =>
+                //     {
+                //         let url = current_url.take().unwrap();
+                //         pending.remove(&url);
 
-                        if let Some(http_image) = http_image
-                        {
-                            println!("Fetched Image: {}", url);
-                            textures.insert(url, upload_image_to_gpu(&gl, http_image));
-                        }
-                        else
-                        {
-                            println!("Something went wrong for: {}", url);
-                            failed.insert(url);
-                        }
+                //         if let Some(http_image) = http_image
+                //         {
+                //             println!("Fetched Image: {}", url);
+                //             textures.insert(url, upload_image_to_gpu(&gl, http_image));
+                //         }
+                //         else
+                //         {
+                //             println!("Something went wrong for: {}", url);
+                //             failed.insert(url);
+                //         }
 
-                        job_complete = true;
-                    },
-                };
+                //         job_complete = true;
+                //     },
+                // };
             }
             else
             {
@@ -384,8 +368,6 @@ async fn main()
                 {
                     camera_tweens[0].advance_by(time_delta as f64);
                     camera.position = camera_tweens[0].now().into();
-
-                    println!("CAM: {}", camera.position);
                 }
             }
 
@@ -428,7 +410,7 @@ async fn main()
                         }
                     }
 
-                    Event::KeyDown { keycode: Some(Keycode::Down), .. } =>
+                    Event::KeyDown { keycode: Some(Keycode::Down), .. } if camera_tweens.is_empty() =>
                     {
                         if let Some(ref collections) = collections
                         {
@@ -440,11 +422,25 @@ async fn main()
                             }
 
                             let row_height = camera.viewport.y / 4.0;
-                            camera.position.y = selection.y * row_height;
+                            // camera.position.y = selection.y * row_height;
+
+                            // TODO(pbz): Don't support queue of animations. Just use one at a time (targets are off)
+                            // ! Make sure that this uses the target from the previous tween (if any)
+
+                            let origin = camera.position;
+                            let target = glam::Vec2::Y * selection.y * row_height;
+
+                            #[rustfmt::skip]
+                            camera_tweens.push_back(
+                                keyframes![
+                                    (origin.into(), 0.0, functions::EaseInOut),
+                                    (target.into(), 0.5, functions::EaseInOut)
+                                ]
+                            );
                         }
                     }
 
-                    Event::KeyDown { keycode: Some(Keycode::Up), .. } =>
+                    Event::KeyDown { keycode: Some(Keycode::Up), .. } if camera_tweens.is_empty() =>
                     {
                         if let Some(ref collections) = collections
                         {
@@ -456,7 +452,21 @@ async fn main()
                             }
 
                             let row_height = camera.viewport.y / 4.0;
-                            camera.position.y = selection.y * row_height;
+                            // camera.position.y = selection.y * row_height;
+
+                            // TODO(pbz): Don't support queue of animations. Just use one at a time (targets are off)
+                            // ! Make sure that this uses the target from the previous tween (if any)
+
+                            let origin = camera.position;
+                            let target = glam::Vec2::Y * selection.y * row_height;
+
+                            #[rustfmt::skip]
+                            camera_tweens.push_back(
+                                keyframes![
+                                    (origin.into(), 0.0, functions::EaseInOut),
+                                    (target.into(), 0.5, functions::EaseInOut)
+                                ]
+                            );
                         }
                     }
 
@@ -503,7 +513,7 @@ async fn main()
             });
 
             spinners.clear();
-            spinner_rotation_angle_degrees += time_delta * 0.25;
+            spinner_rotation_angle_degrees += time_delta * 100.0;
 
             if let Some(ref collections) = collections
             {
@@ -521,24 +531,29 @@ async fn main()
                 );
             }
 
-            let matrix = glam::f32::Mat4::orthographic_rh(
-                camera.position.x + 512.0,
-                camera.position.x + 512.0 + camera.viewport.x,
-                camera.position.y + camera.viewport.y,
-                camera.position.y,
-                -1.0,
-                1.0,
-            );
+            if collections.is_none()
+            {
+                let spinner = glam::vec2(window_width / 2.0, window_height / 2.0);
 
-            draw_image_centered(
-                &gl,
-                program,
-                glam::Vec2::ZERO,
-                glam::vec2(256.0, 128.0),
-                glam::vec4(1.0, 1.0, 1.0, 1.0),
-                matrix * glam::f32::Mat4::from_rotation_z(spinner_rotation_angle_degrees.to_radians()),
-                http_texture,
-            );
+                let transform_matrix = glam::f32::Mat4::orthographic_rh(
+                    camera.position.x - spinner.x,
+                    camera.position.x - spinner.x + camera.viewport.x,
+                    camera.position.y - spinner.y + camera.viewport.y,
+                    camera.position.y - spinner.y,
+                    -1.0,
+                    1.0,
+                );
+
+                draw_image_centered(
+                    &gl,
+                    program,
+                    glam::Vec2::ZERO,
+                    glam::vec2(256.0, 256.0),
+                    glam::vec4(1.0, 1.0, 1.0, 1.0),
+                    transform_matrix * glam::f32::Mat4::from_rotation_z(spinner_rotation_angle_degrees.to_radians()),
+                    spinner_texture,
+                );
+            }
 
             for spinner in &spinners
             {
