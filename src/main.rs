@@ -1,5 +1,4 @@
 use std::collections::{HashMap, HashSet};
-use std::future::Future;
 
 use glam;
 use glow::*;
@@ -7,6 +6,8 @@ use glow_glyph::{ab_glyph, GlyphBrushBuilder, Section, Text};
 use sdl2::event::{Event, WindowEvent};
 use sdl2::keyboard::Keycode;
 use serde_json::Value;
+
+mod shaders;
 
 #[derive(Clone)]
 struct Collection
@@ -19,48 +20,8 @@ struct Collection
 #[derive(Clone)]
 struct Video
 {
-    name: String,
+    _name: String,
     url: String,
-}
-
-struct TextureLibrary
-{
-    textures: HashMap<String, NativeTexture>,
-    pending: HashSet<String>,
-    batches: Vec<String>,
-    // asset_load_futures: HashMap<String, Box<dyn Future<Output = Option<image::DynamicImage>>>>,
-}
-
-impl TextureLibrary
-{
-    fn new() -> Self
-    {
-        Self {
-            textures: HashMap::new(),
-            pending: HashSet::new(),
-            batches: Vec::new(),
-            // current_batch:
-        }
-    }
-
-    fn fetch_unloaded_images(&mut self, collections: &Vec<Collection>)
-    {
-        let mut batch = Vec::new();
-
-        batch.push(async { 1 });
-
-        for collection in collections
-        {
-            for video in &collection.videos
-            {
-                // if !self.textures.contains_key(&video.url) && !self.asset_load_futures.contains_key(&video.url)
-                // {
-                //     self.asset_load_futures
-                //         .insert(video.url.clone(), Box::new(load_image_from_http(video.url.clone())));
-                // }
-            }
-        }
-    }
 }
 
 fn handle_item(item: &Value, aspect_ratio: f32) -> Video
@@ -104,7 +65,7 @@ fn handle_item(item: &Value, aspect_ratio: f32) -> Video
         &appropriate_tiles[content_type]["default"]["url"]
     };
 
-    Video { name: item_name.to_string(), url: tile_url.as_str().unwrap().to_owned() }
+    Video { _name: item_name.to_string(), url: tile_url.as_str().unwrap().to_owned() }
 }
 
 async fn get_collections(aspect_ratio: f32) -> Vec<Collection>
@@ -249,44 +210,7 @@ async fn main()
         let vertex_array = gl.create_vertex_array().expect("Cannot create vertex array");
         gl.bind_vertex_array(Some(vertex_array));
 
-        let program = gl.create_program().expect("Cannot create program");
-
-        let vertex_shader_source =
-            std::fs::read_to_string("res/gpu/hello.vert.glsl").expect("Failed to open GLSL shader file");
-        let fragment_shader_source =
-            std::fs::read_to_string("res/gpu/hello.frag.glsl").expect("Failed to open GLSL shader file");
-
-        let shader_sources =
-            [(glow::VERTEX_SHADER, vertex_shader_source), (glow::FRAGMENT_SHADER, fragment_shader_source)];
-
-        let mut shaders = Vec::with_capacity(shader_sources.len());
-
-        for (shader_type, shader_source) in shader_sources.iter()
-        {
-            let shader = gl.create_shader(*shader_type).expect("Cannot create shader");
-            gl.shader_source(shader, &format!("{}\n{}", shader_version, shader_source));
-            gl.compile_shader(shader);
-
-            if !gl.get_shader_compile_status(shader)
-            {
-                panic!("{}", gl.get_shader_info_log(shader));
-            }
-
-            gl.attach_shader(program, shader);
-            shaders.push(shader);
-        }
-
-        gl.link_program(program);
-        if !gl.get_program_link_status(program)
-        {
-            panic!("{}", gl.get_program_info_log(program));
-        }
-
-        for shader in shaders
-        {
-            gl.detach_shader(program, shader);
-            gl.delete_shader(shader);
-        }
+        let program = shaders::load_shader(&gl, shader_version, "res/gpu/hello.vert.glsl", "res/gpu/hello.frag.glsl");
 
         gl.clear_color(0.0980392156862745, 0.129411764705882, 0.180392156862745, 1.0);
 
@@ -295,6 +219,7 @@ async fn main()
 
         let mut running = true;
         let time_counter_milliseconds = std::time::Instant::now();
+        let mut time_counter_delta = std::time::Instant::now();
 
         let mut collections: Option<Vec<Collection>> = None;
 
@@ -323,7 +248,7 @@ async fn main()
             .unwrap();
         let spinner_dims = glam::vec2(spinner.width() as f32, spinner.height() as f32);
         let spinner_texture = upload_image_to_gpu(&gl, spinner);
-
+        let mut spinner_rotation_angle_degrees: f32 = 0.0;
         let mut spinners = Vec::new();
 
         let mut textures: HashMap<String, NativeTexture> = HashMap::new();
@@ -406,6 +331,8 @@ async fn main()
             }
 
             let time_milliseconds = time_counter_milliseconds.elapsed().as_millis() as f32 / 1000.0;
+            let time_delta = time_counter_delta.elapsed().as_millis() as f32;
+            time_counter_delta = std::time::Instant::now();
 
             for event in events_loop.poll_iter()
             {
@@ -504,16 +431,6 @@ async fn main()
                 disney_logo_texture,
             );
 
-            draw_quad_textured(
-                &gl,
-                program,
-                glam::vec2(0.0, 0.0),
-                glam::vec2(256.0, 128.0),
-                glam::vec4(1.0, 1.0, 1.0, 1.0),
-                origin_matrix,
-                http_texture,
-            );
-
             glyph_brush.queue(Section {
                 screen_position: camera.get_position_in_screen_space(glam::vec2(0.0, 0.0)).into(),
                 bounds: camera.viewport.into(),
@@ -525,6 +442,7 @@ async fn main()
             });
 
             spinners.clear();
+            spinner_rotation_angle_degrees += time_delta * 0.25;
 
             if let Some(ref collections) = collections
             {
@@ -542,7 +460,28 @@ async fn main()
                 );
             }
 
-            draw_all_spinners(&gl, program, &camera, &spinners, spinner_texture, spinner_dims);
+            draw_image_centered(
+                &gl,
+                program,
+                glam::vec2(64.0, 64.0),
+                glam::vec2(256.0, 128.0),
+                glam::vec4(1.0, 1.0, 1.0, 1.0),
+                camera.get_matrix() * glam::f32::Mat4::from_rotation_z(spinner_rotation_angle_degrees.to_radians()),
+                http_texture,
+            );
+
+            for spinner in &spinners
+            {
+                draw_image_centered(
+                    &gl,
+                    program,
+                    *spinner,
+                    glam::vec2(64.0, 64.0),
+                    glam::vec4(1.0, 1.0, 1.0, 1.0),
+                    camera.get_matrix() * glam::f32::Mat4::from_rotation_z(spinner_rotation_angle_degrees.to_radians()),
+                    spinner_texture,
+                );
+            }
 
             glyph_brush.draw_queued(&gl, window_width as u32, window_height as u32).expect("Draw queued");
 
@@ -692,7 +631,16 @@ unsafe fn draw_all_collections(
                 }
                 else
                 {
-                    draw_quad(&gl, program, position, dimensions, glam::vec4(1.0, 0.6, 0.0, 0.5), camera.get_matrix());
+                    draw_quad(
+                        &gl,
+                        program,
+                        position,
+                        dimensions,
+                        glam::vec4(0.227450980392157, 0.227450980392157, 0.258823529411765, 0.5),
+                        camera.get_matrix(),
+                    );
+
+                    spinners.push(position + dimensions / 2.0);
                 }
             }
         }
@@ -724,29 +672,6 @@ unsafe fn upload_image_to_gpu(gl: &Context, image: image::DynamicImage) -> Nativ
     gl.bind_texture(glow::TEXTURE_2D, None);
 
     texture
-}
-
-unsafe fn draw_all_spinners(
-    gl: &Context,
-    program: NativeProgram,
-    camera: &Camera2D,
-    spinners: &Vec<glam::Vec2>,
-    spinner_texture: NativeTexture,
-    spinner_dims: glam::Vec2,
-)
-{
-    for spinner in spinners
-    {
-        draw_quad_textured(
-            &gl,
-            program,
-            *spinner,
-            spinner_dims,
-            glam::vec4(1.0, 1.0, 1.0, 1.0),
-            camera.get_matrix(),
-            spinner_texture,
-        );
-    }
 }
 
 async fn load_image_from_http(url: String) -> Option<image::DynamicImage>
@@ -786,6 +711,49 @@ async fn load_image_from_http(url: String) -> Option<image::DynamicImage>
             None
         }
     }
+}
+
+unsafe fn draw_image_centered(
+    gl: &Context,
+    program: NativeProgram,
+    position: glam::Vec2,
+    dimensions: glam::Vec2,
+    color: glam::Vec4,
+    orthographic_projection_matrix: glam::Mat4,
+    texture: NativeTexture,
+) -> ()
+{
+    gl.active_texture(glow::TEXTURE0);
+    gl.bind_texture(glow::TEXTURE_2D, Some(texture));
+
+    gl.enable(glow::BLEND);
+    gl.blend_func(glow::SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA);
+
+    let using_rectangle_texture = gl.get_uniform_location(program, "using_rectangle_texture").unwrap();
+    gl.uniform_1_u32(Some(&using_rectangle_texture), 1);
+
+    let rectangle_color = gl.get_uniform_location(program, "rectangle_color").unwrap();
+    gl.uniform_4_f32(Some(&rectangle_color), color.x, color.y, color.z, color.w);
+
+    let rectangle_position = gl.get_uniform_location(program, "rectangle_position").unwrap();
+    gl.uniform_2_f32(Some(&rectangle_position), position.x, position.y);
+
+    let rectangle_dimensions = gl.get_uniform_location(program, "rectangle_dimensions").unwrap();
+    gl.uniform_2_f32(Some(&rectangle_dimensions), dimensions.x, dimensions.y);
+
+    let orthographic_projection = gl.get_uniform_location(program, "orthographic_projection").unwrap();
+    gl.uniform_matrix_4_f32_slice(
+        Some(&orthographic_projection),
+        false,
+        &orthographic_projection_matrix.to_cols_array(),
+    );
+
+    gl.draw_arrays(glow::QUADS, 0, 4);
+
+    let using_rectangle_texture = gl.get_uniform_location(program, "using_rectangle_texture").unwrap();
+    gl.uniform_1_u32(Some(&using_rectangle_texture), 0);
+
+    gl.bind_texture(glow::TEXTURE_2D, None);
 }
 
 #[cfg(test)]
