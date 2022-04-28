@@ -288,6 +288,7 @@ async fn main()
         }.await;
 
         let mut camera_tweens = VecDeque::<AnimationSequence<V2>>::new();
+        let mut col_tweens = VecDeque::<AnimationSequence<f32>>::new();
 
         while running
         {
@@ -358,7 +359,7 @@ async fn main()
             let time_delta = time_counter_delta.elapsed().as_millis() as f32 / 1000.0;
             time_counter_delta = std::time::Instant::now();
 
-            if camera_tweens.len() > 0
+            if !camera_tweens.is_empty()
             {
                 if camera_tweens[0].finished()
                 {
@@ -368,6 +369,19 @@ async fn main()
                 {
                     camera_tweens[0].advance_by(time_delta as f64);
                     camera.position = camera_tweens[0].now().into();
+                }
+            }
+
+            if !col_tweens.is_empty()
+            {
+                if col_tweens[0].finished()
+                {
+                    col_tweens.pop_front();
+                }
+                else
+                {
+                    col_tweens[0].advance_by(time_delta as f64);
+                    selection.x = col_tweens[0].now();
                 }
             }
 
@@ -382,31 +396,53 @@ async fn main()
                     Event::KeyDown { keycode: Some(Keycode::S), .. } => camera.position.y += 64.0,
                     Event::KeyDown { keycode: Some(Keycode::W), .. } => camera.position.y -= 64.0,
 
-                    Event::KeyDown { keycode: Some(Keycode::Right), .. } =>
+                    Event::KeyDown { keycode: Some(Keycode::Right), .. } if col_tweens.is_empty() =>
                     {
                         if let Some(ref mut collections) = collections
                         {
                             let index = selection.y as usize;
+                            let origin = collections[index].selected_video;
                             collections[index].selected_video += 1;
 
                             if collections[index].selected_video >= collections[index].videos.len() as i32
                             {
                                 collections[index].selected_video = 0;
                             }
+
+                            let target = collections[index].selected_video;
+
+                            #[rustfmt::skip]
+                            col_tweens.push_back(
+                                keyframes![
+                                    (origin as f32, 0.0f32, functions::EaseInOut),
+                                    (target as f32, 0.5f32, functions::EaseInOut)
+                                ]
+                            );
                         }
                     }
 
-                    Event::KeyDown { keycode: Some(Keycode::Left), .. } =>
+                    Event::KeyDown { keycode: Some(Keycode::Left), .. } if col_tweens.is_empty() =>
                     {
                         if let Some(ref mut collections) = collections
                         {
                             let index = selection.y as usize;
+                            let origin = collections[index].selected_video;
                             collections[index].selected_video -= 1;
 
                             if collections[index].selected_video < 0
                             {
                                 collections[index].selected_video = collections[index].videos.len() as i32 - 1;
                             }
+
+                            let target = collections[index].selected_video;
+
+                            #[rustfmt::skip]
+                            col_tweens.push_back(
+                                keyframes![
+                                    (origin as f32, 0.0f32, functions::EaseInOut),
+                                    (target as f32, 0.5f32, functions::EaseInOut)
+                                ]
+                            );
                         }
                     }
 
@@ -414,6 +450,7 @@ async fn main()
                     {
                         if let Some(ref collections) = collections
                         {
+                            let col_origin = collections[selection.y as usize].selected_video;
                             selection.y += 1.0;
 
                             if selection.y >= collections.len() as f32
@@ -421,11 +458,18 @@ async fn main()
                                 selection.y = 0.0;
                             }
 
+                            let col_target = collections[selection.y as usize].selected_video;
+
+                            #[rustfmt::skip]
+                            col_tweens.push_back(
+                                keyframes![
+                                    (col_origin as f32, 0.0f32, functions::EaseInOut),
+                                    (col_target as f32, 0.5f32, functions::EaseInOut)
+                                ]
+                            );
+
                             let row_height = camera.viewport.y / 4.0;
                             // camera.position.y = selection.y * row_height;
-
-                            // TODO(pbz): Don't support queue of animations. Just use one at a time (targets are off)
-                            // ! Make sure that this uses the target from the previous tween (if any)
 
                             let origin = camera.position;
                             let target = glam::Vec2::Y * selection.y * row_height;
@@ -444,6 +488,7 @@ async fn main()
                     {
                         if let Some(ref collections) = collections
                         {
+                            let col_origin = collections[selection.y as usize].selected_video;
                             selection.y -= 1.0;
 
                             if selection.y < 0.0
@@ -451,11 +496,18 @@ async fn main()
                                 selection.y = collections.len() as f32 - 1.0;
                             }
 
+                            let col_target = collections[selection.y as usize].selected_video;
+
+                            #[rustfmt::skip]
+                            col_tweens.push_back(
+                                keyframes![
+                                    (col_origin as f32, 0.0f32, functions::EaseInOut),
+                                    (col_target as f32, 0.5f32, functions::EaseInOut)
+                                ]
+                            );
+
                             let row_height = camera.viewport.y / 4.0;
                             // camera.position.y = selection.y * row_height;
-
-                            // TODO(pbz): Don't support queue of animations. Just use one at a time (targets are off)
-                            // ! Make sure that this uses the target from the previous tween (if any)
 
                             let origin = camera.position;
                             let target = glam::Vec2::Y * selection.y * row_height;
@@ -548,7 +600,7 @@ async fn main()
                     &gl,
                     program,
                     glam::Vec2::ZERO,
-                    glam::vec2(256.0, 256.0),
+                    glam::vec2(64.0, 64.0),
                     glam::vec4(1.0, 1.0, 1.0, 1.0),
                     transform_matrix * glam::f32::Mat4::from_rotation_z(spinner_rotation_angle_degrees.to_radians()),
                     spinner_texture,
@@ -683,10 +735,9 @@ unsafe fn draw_all_collections(
 
         for (col, video) in collection.videos.iter().enumerate()
         {
-            // let selected = glam::ivec2(col as i32, row as i32) == selection.as_ivec2();
             let selected = row_selected && col as i32 == collection.selected_video;
             let col_y = row_y + title_height;
-            let selection_offset_x = collection.selected_video as f32 * col_width;
+            let selection_offset_x = selection.x * col_width;
             let col_x = col as f32 * col_width - selection_offset_x;
             let position = glam::vec2(col_x, col_y);
             let dimensions = glam::vec2(col_margin + col_cell_width, row_height - title_height);
