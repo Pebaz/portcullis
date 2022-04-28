@@ -290,6 +290,47 @@ async fn main()
         let mut camera_tweens = VecDeque::<AnimationSequence<V2>>::new();
         let mut col_tweens = VecDeque::<AnimationSequence<f32>>::new();
 
+        let mut showing_content = None;
+        let sdf_program = shaders::load_shader(&gl, shader_version, "res/gpu/hello.vert.glsl", "res/gpu/sdf.frag.glsl");
+
+        let (framebuffer, render_texture) = {
+            let framebuffer = gl.create_framebuffer().expect("Couldn't create framebuffer");
+            gl.bind_framebuffer(glow::FRAMEBUFFER, Some(framebuffer));
+
+            let render_texture = gl.create_texture().expect("Couldn't create render texture");
+            gl.bind_texture(glow::TEXTURE_2D, Some(render_texture));
+
+            gl.tex_image_2d(
+                glow::TEXTURE_2D,
+                0,
+                glow::RGB as i32,
+                window.size().0 as i32,
+                window.size().1 as i32,
+                0,
+                glow::RGB,
+                glow::UNSIGNED_BYTE,
+                None,
+            );
+
+            gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MIN_FILTER, glow::NEAREST as i32);
+            gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MAG_FILTER, glow::NEAREST as i32);
+
+            gl.framebuffer_texture(glow::FRAMEBUFFER, glow::COLOR_ATTACHMENT0, Some(render_texture), 0);
+
+            gl.draw_buffers(&[glow::COLOR_ATTACHMENT0]);
+
+            if (gl.check_framebuffer_status(glow::FRAMEBUFFER)) != glow::FRAMEBUFFER_COMPLETE
+            {
+                // TODO(pbz): Alternatively just don't allow content playback
+                panic!("Failed to initialize framebuffer for rendering");
+            }
+
+            gl.bind_texture(glow::TEXTURE_2D, None);
+            gl.bind_framebuffer(glow::FRAMEBUFFER, None);
+
+            (framebuffer, render_texture)
+        };
+
         while running
         {
             if collections.is_none()
@@ -390,7 +431,6 @@ async fn main()
                 match event
                 {
                     Event::Quit { .. } => running = false,
-                    Event::KeyDown { keycode: Some(Keycode::Escape), .. } => running = false,
                     Event::KeyDown { keycode: Some(Keycode::D), .. } => camera.position.x += 64.0,
                     Event::KeyDown { keycode: Some(Keycode::A), .. } => camera.position.x -= 64.0,
                     Event::KeyDown { keycode: Some(Keycode::S), .. } => camera.position.y += 64.0,
@@ -528,6 +568,19 @@ async fn main()
                         }
                     }
 
+                    Event::KeyDown { keycode: Some(Keycode::Return), .. }
+                        if camera_tweens.is_empty() && col_tweens.is_empty() =>
+                    {
+                        showing_content = Some(sdf_program);
+                    }
+
+                    Event::KeyDown { keycode: Some(Keycode::Escape), .. } if showing_content.is_some() =>
+                    {
+                        showing_content = None;
+                    }
+
+                    Event::KeyDown { keycode: Some(Keycode::Escape), .. } => running = false,
+
                     Event::Window { win_event, .. } =>
                     {
                         if let WindowEvent::Resized(width, height) = win_event
@@ -546,96 +599,113 @@ async fn main()
 
             gl.clear(glow::COLOR_BUFFER_BIT);
 
-            gl.use_program(Some(program));
-
-            let origin_matrix = camera.get_origin_matrix();
-            let smaller_dims = disney_logo_dims * 0.5;
-            draw_quad_textured(
-                &gl,
-                program,
-                glam::vec2(window_width / 2.0 - (smaller_dims.x / 2.0), window_height / 2.0 - (smaller_dims.y / 2.0)),
-                smaller_dims,
-                glam::vec4(1.0, 1.0, 1.0, 1.0),
-                origin_matrix,
-                disney_logo_texture,
-            );
-
-            glyph_brush.queue(Section {
-                screen_position: camera.get_position_in_screen_space(glam::vec2(0.0, 0.0)).into(),
-                bounds: camera.viewport.into(),
-                text: vec![Text::default()
-                    .with_text(format!("{}", time_milliseconds).as_str())
-                    .with_color([1.0, 1.0, 1.0, 1.0])
-                    .with_scale(12.0)],
-                ..Section::default()
-            });
-
-            spinners.clear();
-            spinner_rotation_angle_degrees += time_delta * 100.0;
-
-            if let Some(ref collections) = collections
+            if showing_content.is_some()
             {
-                draw_all_collections(
-                    collections,
-                    &gl,
-                    program,
-                    &camera,
-                    &mut glyph_brush,
-                    selection,
-                    &mut spinners,
-                    &textures,
-                    &mut pending,
-                    &failed,
-                );
+                gl.bind_framebuffer(glow::FRAMEBUFFER, Some(framebuffer));
+                gl.viewport(0, 0, window_width as i32, window_height as i32);
+
+                gl.use_program(showing_content);
+
+                gl.bind_framebuffer(glow::FRAMEBUFFER, None);
             }
-
-            if collections.is_none()
+            else
             {
-                let spinner = glam::vec2(window_width / 2.0, window_height / 2.0);
+                gl.use_program(Some(program));
 
-                let transform_matrix = glam::f32::Mat4::orthographic_rh(
-                    camera.position.x - spinner.x,
-                    camera.position.x - spinner.x + camera.viewport.x,
-                    camera.position.y - spinner.y + camera.viewport.y,
-                    camera.position.y - spinner.y,
-                    -1.0,
-                    1.0,
-                );
-
-                draw_image_centered(
+                let origin_matrix = camera.get_origin_matrix();
+                let smaller_dims = disney_logo_dims * 0.5;
+                draw_quad_textured(
                     &gl,
                     program,
-                    glam::Vec2::ZERO,
-                    glam::vec2(64.0, 64.0),
+                    glam::vec2(
+                        window_width / 2.0 - (smaller_dims.x / 2.0),
+                        window_height / 2.0 - (smaller_dims.y / 2.0),
+                    ),
+                    smaller_dims,
                     glam::vec4(1.0, 1.0, 1.0, 1.0),
-                    transform_matrix * glam::f32::Mat4::from_rotation_z(spinner_rotation_angle_degrees.to_radians()),
-                    spinner_texture,
+                    origin_matrix,
+                    disney_logo_texture,
                 );
+
+                glyph_brush.queue(Section {
+                    screen_position: camera.get_position_in_screen_space(glam::vec2(0.0, 0.0)).into(),
+                    bounds: camera.viewport.into(),
+                    text: vec![Text::default()
+                        .with_text(format!("{}", time_milliseconds).as_str())
+                        .with_color([1.0, 1.0, 1.0, 1.0])
+                        .with_scale(12.0)],
+                    ..Section::default()
+                });
+
+                spinners.clear();
+                spinner_rotation_angle_degrees += time_delta * 100.0;
+
+                if let Some(ref collections) = collections
+                {
+                    draw_all_collections(
+                        collections,
+                        &gl,
+                        program,
+                        &camera,
+                        &mut glyph_brush,
+                        selection,
+                        &mut spinners,
+                        &textures,
+                        &mut pending,
+                        &failed,
+                    );
+                }
+
+                if collections.is_none()
+                {
+                    let spinner = glam::vec2(window_width / 2.0, window_height / 2.0);
+
+                    let transform_matrix = glam::f32::Mat4::orthographic_rh(
+                        camera.position.x - spinner.x,
+                        camera.position.x - spinner.x + camera.viewport.x,
+                        camera.position.y - spinner.y + camera.viewport.y,
+                        camera.position.y - spinner.y,
+                        -1.0,
+                        1.0,
+                    );
+
+                    draw_image_centered(
+                        &gl,
+                        program,
+                        glam::Vec2::ZERO,
+                        glam::vec2(64.0, 64.0),
+                        glam::vec4(1.0, 1.0, 1.0, 1.0),
+                        transform_matrix
+                            * glam::f32::Mat4::from_rotation_z(spinner_rotation_angle_degrees.to_radians()),
+                        spinner_texture,
+                    );
+                }
+
+                for spinner in &spinners
+                {
+                    let transform_matrix = glam::f32::Mat4::orthographic_rh(
+                        camera.position.x - spinner.x,
+                        camera.position.x - spinner.x + camera.viewport.x,
+                        camera.position.y - spinner.y + camera.viewport.y,
+                        camera.position.y - spinner.y,
+                        -1.0,
+                        1.0,
+                    );
+
+                    draw_image_centered(
+                        &gl,
+                        program,
+                        glam::Vec2::ZERO,
+                        glam::vec2(64.0, 64.0),
+                        glam::vec4(1.0, 1.0, 1.0, 1.0),
+                        transform_matrix
+                            * glam::f32::Mat4::from_rotation_z(spinner_rotation_angle_degrees.to_radians()),
+                        spinner_texture,
+                    );
+                }
+
+                glyph_brush.draw_queued(&gl, window_width as u32, window_height as u32).expect("Draw queued");
             }
-
-            for spinner in &spinners
-            {
-                let transform_matrix = glam::f32::Mat4::orthographic_rh(
-                    camera.position.x - spinner.x,
-                    camera.position.x - spinner.x + camera.viewport.x,
-                    camera.position.y - spinner.y + camera.viewport.y,
-                    camera.position.y - spinner.y,
-                    -1.0,
-                    1.0,
-                );
-
-                draw_image_centered(
-                    &gl,
-                    program,
-                    glam::Vec2::ZERO,
-                    glam::vec2(64.0, 64.0),
-                    glam::vec4(1.0, 1.0, 1.0, 1.0),
-                    transform_matrix * glam::f32::Mat4::from_rotation_z(spinner_rotation_angle_degrees.to_radians()),
-                    spinner_texture,
-                );
-            }
-
-            glyph_brush.draw_queued(&gl, window_width as u32, window_height as u32).expect("Draw queued");
 
             window.gl_swap_window();
 
