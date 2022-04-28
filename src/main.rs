@@ -542,7 +542,7 @@ unsafe fn draw_all_collections(
             // let selected = glam::ivec2(col as i32, row as i32) == selection.as_ivec2();
             let selected = row_selected && col as i32 == collection.selected_video;
             let col_y = row_y + title_height;
-            let selection_offset_x = if row_selected { selection.x * col_width } else { 0.0 };
+            let selection_offset_x = collection.selected_video as f32 * col_width;
             let col_x = col as f32 * col_width - selection_offset_x;
             let position = glam::vec2(col_x, col_y);
             let dimensions = glam::vec2(col_margin + col_cell_width, row_height - title_height);
