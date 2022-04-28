@@ -678,7 +678,22 @@ unsafe fn draw_all_collections(
                     );
                 }
 
-                draw_quad(&gl, program, position, dimensions, glam::vec4(1.0, 0.6, 0.0, 0.5), camera.get_matrix());
+                if textures.contains_key(&video.url)
+                {
+                    draw_quad_textured(
+                        &gl,
+                        program,
+                        position,
+                        dimensions,
+                        glam::vec4(1.0, 1.0, 1.0, 1.0),
+                        camera.get_matrix(),
+                        textures[&video.url],
+                    );
+                }
+                else
+                {
+                    draw_quad(&gl, program, position, dimensions, glam::vec4(1.0, 0.6, 0.0, 0.5), camera.get_matrix());
+                }
             }
         }
     }
