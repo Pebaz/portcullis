@@ -218,7 +218,7 @@ async fn main()
             let window = video
                 .window("Portcullis", STARTING_WINDOW_WIDTH as u32, STARTING_WINDOW_HEIGHT as u32)
                 .opengl()
-                // .resizable() 😭
+                // 😭 .resizable()
                 .build()
                 .unwrap();
             let gl_context = window.gl_create_context().unwrap();
@@ -292,44 +292,6 @@ async fn main()
 
         let mut showing_content = None;
         let sdf_program = shaders::load_shader(&gl, shader_version, "res/gpu/hello.vert.glsl", "res/gpu/sdf.frag.glsl");
-
-        let (framebuffer, render_texture) = {
-            let framebuffer = gl.create_framebuffer().expect("Couldn't create framebuffer");
-            gl.bind_framebuffer(glow::FRAMEBUFFER, Some(framebuffer));
-
-            let render_texture = gl.create_texture().expect("Couldn't create render texture");
-            gl.bind_texture(glow::TEXTURE_2D, Some(render_texture));
-
-            gl.tex_image_2d(
-                glow::TEXTURE_2D,
-                0,
-                glow::RGB as i32,
-                window.size().0 as i32,
-                window.size().1 as i32,
-                0,
-                glow::RGB,
-                glow::UNSIGNED_BYTE,
-                None,
-            );
-
-            gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MIN_FILTER, glow::NEAREST as i32);
-            gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MAG_FILTER, glow::NEAREST as i32);
-
-            gl.framebuffer_texture(glow::FRAMEBUFFER, glow::COLOR_ATTACHMENT0, Some(render_texture), 0);
-
-            gl.draw_buffers(&[glow::COLOR_ATTACHMENT0]);
-
-            if (gl.check_framebuffer_status(glow::FRAMEBUFFER)) != glow::FRAMEBUFFER_COMPLETE
-            {
-                // TODO(pbz): Alternatively just don't allow content playback
-                panic!("Failed to initialize framebuffer for rendering");
-            }
-
-            gl.bind_texture(glow::TEXTURE_2D, None);
-            gl.bind_framebuffer(glow::FRAMEBUFFER, None);
-
-            (framebuffer, render_texture)
-        };
 
         while running
         {
@@ -601,12 +563,16 @@ async fn main()
 
             if showing_content.is_some()
             {
-                gl.bind_framebuffer(glow::FRAMEBUFFER, Some(framebuffer));
-                gl.viewport(0, 0, window_width as i32, window_height as i32);
-
                 gl.use_program(showing_content);
 
-                gl.bind_framebuffer(glow::FRAMEBUFFER, None);
+                draw_quad(
+                    &gl,
+                    showing_content.unwrap(),
+                    glam::Vec2::ZERO,
+                    glam::vec2(window_width, window_height), // TODO(pbz): Scale this up with tween later
+                    glam::Vec4::ONE,
+                    camera.get_matrix(),
+                );
             }
             else
             {

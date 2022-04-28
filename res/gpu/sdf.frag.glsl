@@ -9,5 +9,13 @@ uniform sampler2D rectangle_texture;
 
 void main()
 {
-    color = vec4(1, 1, 1, 1);
+    if (using_rectangle_texture > uint(0))
+    {
+        vec4 sample = texture(rectangle_texture, uv);
+        color = sample * rectangle_color;
+    }
+    else
+    {
+        color = vec4(1.0, 0.0, 1.0, 1.0);
+    }
 }
