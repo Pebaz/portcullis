@@ -63,11 +63,6 @@ impl TextureLibrary
     }
 }
 
-async fn load_image_from_http(url: String) -> Option<image::DynamicImage>
-{
-    None
-}
-
 fn handle_item(item: &Value, aspect_ratio: f32) -> Video
 {
     let title_map = {
@@ -339,16 +334,8 @@ async fn main()
         let mut pending: HashSet<String> = HashSet::new();
 
         let http_texture = async {
-            let bytes = reqwest::get("https://prod-ripcut-delivery.disney-plus.net/v1/variant/disney/9F9C4A480357CD8D21E2C675B146D40782B92F570660B028AC7FA149E21B88D2/scale?format=jpeg&quality=90&scalingAlgorithm=lanczos3&width=500")
+            let http_image = load_image_from_http("https://prod-ripcut-delivery.disney-plus.net/v1/variant/disney/9F9C4A480357CD8D21E2C675B146D40782B92F570660B028AC7FA149E21B88D2/scale?format=jpeg&quality=90&scalingAlgorithm=lanczos3&width=500")
                 .await
-                .unwrap()
-                .bytes()
-                .await
-                .unwrap();
-
-            let http_image = image::io::Reader::new(std::io::Cursor::new(bytes)).with_guessed_format()
-                .unwrap()
-                .decode()
                 .unwrap();
 
             upload_image_to_gpu(&gl, http_image)
@@ -710,6 +697,16 @@ unsafe fn draw_all_spinners(
             spinner_texture,
         );
     }
+}
+
+async unsafe fn load_image_from_http(url: &str) -> Option<image::DynamicImage>
+{
+    let bytes = reqwest::get(url).await.unwrap().bytes().await.unwrap();
+
+    let http_image =
+        image::io::Reader::new(std::io::Cursor::new(bytes)).with_guessed_format().unwrap().decode().unwrap();
+
+    Some(http_image)
 }
 
 #[cfg(test)]
