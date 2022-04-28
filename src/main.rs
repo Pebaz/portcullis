@@ -1,3 +1,6 @@
+use std::collections::HashMap;
+use std::future::Future;
+
 use glam;
 use glow::*;
 use glow_glyph::{ab_glyph, GlyphBrushBuilder, Section, Text};
@@ -20,10 +23,68 @@ struct Video
     url: String,
 }
 
+struct TextureLibrary
+{
+    textures: HashMap<String, NativeTexture>,
+    asset_load_futures: HashMap<String, Box<dyn Future<Output = Option<image::DynamicImage>>>>,
+}
+
+impl TextureLibrary
+{
+    fn new() -> Self
+    {
+        Self { textures: HashMap::new(), asset_load_futures: HashMap::new() }
+    }
+
+    fn fetch_unloaded_images(&mut self, collections: &Vec<Collection>)
+    {
+        for collection in collections
+        {
+            for video in &collection.videos
+            {
+                if !self.textures.contains_key(&video.url) && !self.asset_load_futures.contains_key(&video.url)
+                {
+                    self.asset_load_futures
+                        .insert(video.url.clone(), Box::new(load_image_from_http(video.url.clone())));
+                }
+            }
+        }
+    }
+}
+
+async fn load_image_from_http(url: String) -> Option<image::DynamicImage>
+{
+    None
+}
+
+async fn fulfill_requests(texture_library: &mut TextureLibrary)
+{
+    // Only using 31% of the frame budget of 16 ms at 60 FPS
+    let timeout = tokio::time::sleep(tokio::time::Duration::from_millis(5));
+    tokio::pin!(timeout);
+
+    // if !collections.is_some()
+    // {
+    //     tokio::select! {
+    //         _ = &mut timeout => (),
+    //         collections_results = &mut collections_future =>
+    //         {
+    //             println!("HTTP Request completed! Len: {}", collections_results.len());
+
+    //             collections = Some(collections_results);
+    //         },
+    //     };
+    // }
+
+    let mut foo = Vec::new();
+
+    foo.push(async { 1 });
+}
+
 fn handle_item(item: &Value, aspect_ratio: f32) -> Video
 {
     let title_map = {
-        let mut title_map = std::collections::HashMap::new();
+        let mut title_map = HashMap::new();
         title_map.insert("DmcSeries", "series");
         title_map.insert("DmcVideo", "program");
         title_map.insert("StandardCollection", "collection");
@@ -122,12 +183,6 @@ async fn get_collections(aspect_ratio: f32) -> Vec<Collection>
     }
 
     collections
-}
-
-struct TextureLibrary
-{
-    textures: std::collections::HashMap<String, NativeTexture>,
-    // asset_load_futures: Vec<dyn std::future::Future<Output = ()>>,
 }
 
 struct Camera2D
@@ -291,13 +346,19 @@ async fn main()
 
         let mut spinners = Vec::new();
 
+        let mut texture_library = TextureLibrary::new();
+
         while running
         {
-            // Only using 62% of the frame budget of 16 ms at 60 FPS
-            let timeout = tokio::time::sleep(tokio::time::Duration::from_millis(10));
+            // Only using 31% of the frame budget of 16 ms at 60 FPS
+            let timeout = tokio::time::sleep(tokio::time::Duration::from_millis(5));
             tokio::pin!(timeout);
 
-            if !collections.is_some()
+            if let Some(ref collections) = collections
+            {
+                texture_library.fetch_unloaded_images(collections);
+            }
+            else
             {
                 tokio::select! {
                     _ = &mut timeout => (),
@@ -423,7 +484,16 @@ async fn main()
 
             if let Some(ref collections) = collections
             {
-                draw_all_collections(collections, &gl, program, &camera, &mut glyph_brush, selection, &mut spinners);
+                draw_all_collections(
+                    collections,
+                    &gl,
+                    program,
+                    &camera,
+                    &mut glyph_brush,
+                    selection,
+                    &mut spinners,
+                    &texture_library,
+                );
             }
 
             draw_all_spinners(&gl, program, &camera, &spinners, spinner_texture, spinner_dims);
@@ -504,6 +574,7 @@ unsafe fn draw_all_collections(
     glyph_brush: &mut glow_glyph::GlyphBrush,
     selection: glam::Vec2,
     spinners: &mut Vec<glam::Vec2>,
+    texture_library: &TextureLibrary,
 )
 {
     let row_height = camera.viewport.y / 4.0;
@@ -561,17 +632,6 @@ unsafe fn draw_all_collections(
         }
     }
 }
-
-// ❓ Possibly useful later
-// fn load_image_from_file(filename: &str) -> Option<(u32, u32, Vec<u8>)>
-// {
-//     let image = image::open(filename).unwrap();
-//     let width = image.width();
-//     let height = image.height();
-//     let pixel_data = image.into_rgba8().into_vec();
-
-//     Some((width, height, pixel_data))
-// }
 
 unsafe fn upload_image_to_gpu(gl: &Context, image: image::DynamicImage) -> NativeTexture
 {
@@ -637,3 +697,14 @@ mod test
         assert_eq!(camera.is_rectangle_in_view(glam::vec2(1000.0, 1000.0), glam::vec2(64.0, 64.0)), false);
     }
 }
+
+// ❓ Possibly useful later
+// fn load_image_from_file(filename: &str) -> Option<(u32, u32, Vec<u8>)>
+// {
+//     let image = image::open(filename).unwrap();
+//     let width = image.width();
+//     let height = image.height();
+//     let pixel_data = image.into_rgba8().into_vec();
+
+//     Some((width, height, pixel_data))
+// }
