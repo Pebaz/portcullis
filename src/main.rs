@@ -398,7 +398,8 @@ async fn main()
                     Event::KeyDown { keycode: Some(Keycode::S), .. } => camera.position.y += 64.0,
                     Event::KeyDown { keycode: Some(Keycode::W), .. } => camera.position.y -= 64.0,
 
-                    Event::KeyDown { keycode: Some(Keycode::Right), .. } if col_tweens.is_empty() =>
+                    Event::KeyDown { keycode: Some(Keycode::Right), .. }
+                        if showing_content.is_none() && col_tweens.is_empty() =>
                     {
                         if let Some(ref mut collections) = collections
                         {
@@ -423,7 +424,8 @@ async fn main()
                         }
                     }
 
-                    Event::KeyDown { keycode: Some(Keycode::Left), .. } if col_tweens.is_empty() =>
+                    Event::KeyDown { keycode: Some(Keycode::Left), .. }
+                        if showing_content.is_none() && col_tweens.is_empty() =>
                     {
                         if let Some(ref mut collections) = collections
                         {
@@ -449,7 +451,7 @@ async fn main()
                     }
 
                     Event::KeyDown { keycode: Some(Keycode::Down), .. }
-                        if camera_tweens.is_empty() && col_tweens.is_empty() =>
+                        if showing_content.is_none() && camera_tweens.is_empty() && col_tweens.is_empty() =>
                     {
                         if let Some(ref collections) = collections
                         {
@@ -490,7 +492,7 @@ async fn main()
                     }
 
                     Event::KeyDown { keycode: Some(Keycode::Up), .. }
-                        if camera_tweens.is_empty() && col_tweens.is_empty() =>
+                        if showing_content.is_none() && camera_tweens.is_empty() && col_tweens.is_empty() =>
                     {
                         if let Some(ref collections) = collections
                         {
