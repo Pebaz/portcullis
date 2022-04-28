@@ -460,25 +460,43 @@ async fn main()
                 );
             }
 
+            let matrix = glam::f32::Mat4::orthographic_rh(
+                camera.position.x + 512.0,
+                camera.position.x + 512.0 + camera.viewport.x,
+                camera.position.y + camera.viewport.y,
+                camera.position.y,
+                -1.0,
+                1.0,
+            );
+
             draw_image_centered(
                 &gl,
                 program,
-                glam::vec2(64.0, 64.0),
+                glam::Vec2::ZERO,
                 glam::vec2(256.0, 128.0),
                 glam::vec4(1.0, 1.0, 1.0, 1.0),
-                camera.get_matrix() * glam::f32::Mat4::from_rotation_z(spinner_rotation_angle_degrees.to_radians()),
+                matrix * glam::f32::Mat4::from_rotation_z(spinner_rotation_angle_degrees.to_radians()),
                 http_texture,
             );
 
             for spinner in &spinners
             {
+                let transform_matrix = glam::f32::Mat4::orthographic_rh(
+                    camera.position.x - spinner.x,
+                    camera.position.x - spinner.x + camera.viewport.x,
+                    camera.position.y - spinner.y + camera.viewport.y,
+                    camera.position.y - spinner.y,
+                    -1.0,
+                    1.0,
+                );
+
                 draw_image_centered(
                     &gl,
                     program,
-                    *spinner,
+                    glam::Vec2::ZERO,
                     glam::vec2(64.0, 64.0),
                     glam::vec4(1.0, 1.0, 1.0, 1.0),
-                    camera.get_matrix() * glam::f32::Mat4::from_rotation_z(spinner_rotation_angle_degrees.to_radians()),
+                    transform_matrix * glam::f32::Mat4::from_rotation_z(spinner_rotation_angle_degrees.to_radians()),
                     spinner_texture,
                 );
             }
