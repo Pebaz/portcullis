@@ -328,13 +328,14 @@ async fn main()
 
         let mut spinners = Vec::new();
 
-        let mut texture_library = TextureLibrary::new();
-
         let mut textures: HashMap<String, NativeTexture> = HashMap::new();
         let mut pending: HashSet<String> = HashSet::new();
+        let mut failed: HashSet<String> = HashSet::new(); // TODO: Don't repeatedly attempt 404s
+        let mut current_job = None;
+        let mut current_url: Option<String> = None;
 
         let http_texture = async {
-            let http_image = load_image_from_http("https://prod-ripcut-delivery.disney-plus.net/v1/variant/disney/9F9C4A480357CD8D21E2C675B146D40782B92F570660B028AC7FA149E21B88D2/scale?format=jpeg&quality=90&scalingAlgorithm=lanczos3&width=500")
+            let http_image = load_image_from_http("https://prod-ripcut-delivery.disney-plus.net/v1/variant/disney/9F9C4A480357CD8D21E2C675B146D40782B92F570660B028AC7FA149E21B88D2/scale?format=jpeg&quality=90&scalingAlgorithm=lanczos3&width=500".to_string())
                 .await
                 .unwrap();
 
@@ -343,31 +344,15 @@ async fn main()
 
         while running
         {
-            // Only using 31% of the frame budget of 16 ms at 60 FPS
-            let timeout = tokio::time::sleep(tokio::time::Duration::from_millis(5));
-            tokio::pin!(timeout);
-
-            if let Some(ref collections) = collections
+            if collections.is_none()
             {
-                // texture_library.fetch_unloaded_images(collections);
+                // Only using 31% of the frame budget of 16 ms at 60 FPS
+                let timeout = tokio::time::sleep(tokio::time::Duration::from_millis(5));
+                tokio::pin!(timeout);
 
-                for collection in collections
-                {
-                    for video in &collection.videos
-                    {
-                        if !textures.contains_key(&video.url) && !pending.contains(&video.url)
-                        {}
-                        // !self.asset_load_futures.contains_key(&video.url) {
-                        //     self.asset_load_futures
-                        //         .insert(video.url.clone(), Box::new(load_image_from_http(video.url.clone())));
-                        // }
-                    }
-                }
-            }
-            else
-            {
                 tokio::select! {
                     _ = &mut timeout => (),
+
                     collections_results = &mut collections_future =>
                     {
                         println!("HTTP Request completed! Len: {}", collections_results.len());
@@ -376,6 +361,78 @@ async fn main()
                     },
                 };
             }
+
+            let mut job_complete = false;
+            if let Some(ref mut current_job) = current_job
+            {
+                // Only using 31% of the frame budget of 16 ms at 60 FPS
+                let timeout = tokio::time::sleep(tokio::time::Duration::from_millis(5));
+                tokio::pin!(timeout);
+
+                tokio::select! {
+                    _ = &mut timeout => (),
+
+                    http_image = current_job =>
+                    {
+                        let url = current_url.take().unwrap();
+                        pending.remove(&url);
+
+                        if let Some(http_image) = http_image
+                        {
+                            println!("Fetched Image: {}", url);
+                            textures.insert(url, upload_image_to_gpu(&gl, http_image));
+                        }
+                        else
+                        {
+                            println!("Something went wrong for: {}", url);
+                            failed.insert(url);
+                        }
+
+                        job_complete = true;
+                    },
+                };
+            }
+            else
+            {
+                for url in pending.iter()
+                {
+                    current_job = Some(Box::pin(load_image_from_http(url.clone())));
+                    current_url = Some(url.clone());
+                    break;
+                }
+            }
+
+            if job_complete
+            {
+                current_job = None;
+            }
+
+            // if let Some(ref mut future) = current_job
+            // {
+            //     // Only using 31% of the frame budget of 16 ms at 60 FPS
+            //     let timeout = tokio::time::sleep(tokio::time::Duration::from_millis(5));
+            //     tokio::pin!(timeout);
+
+            //     tokio::select! {
+            //         _ = &mut timeout => (),
+
+            //         http_image = &mut future =>
+            //         {
+            //             // textures.insert(current_url.unwrap().clone(), http_image.unwrap());
+            //             current_url = None;
+            //         },
+            //     };
+            // }
+
+            // if current_url.is_none()
+            // {
+            //     for url in pending.iter()
+            //     {
+            //         current_job = Some(std::rc::Rc::new(load_image_from_http(url.clone())));
+            //         current_url = Some(url.clone());
+            //         break;
+            //     }
+            // }
 
             let time_milliseconds = time_counter_milliseconds.elapsed().as_millis() as f32 / 1000.0;
 
@@ -508,7 +565,9 @@ async fn main()
                     &mut glyph_brush,
                     selection,
                     &mut spinners,
-                    &texture_library,
+                    &textures,
+                    &mut pending,
+                    &failed,
                 );
             }
 
@@ -590,7 +649,9 @@ unsafe fn draw_all_collections(
     glyph_brush: &mut glow_glyph::GlyphBrush,
     selection: glam::Vec2,
     spinners: &mut Vec<glam::Vec2>,
-    texture_library: &TextureLibrary,
+    textures: &HashMap<String, NativeTexture>,
+    pending: &mut HashSet<String>,
+    failed: &HashSet<String>,
 )
 {
     let row_height = camera.viewport.y / 4.0;
@@ -616,7 +677,7 @@ unsafe fn draw_all_collections(
 
         let row_selected = row as i32 == selection.y as i32;
 
-        for (col, _video) in collection.videos.iter().enumerate()
+        for (col, video) in collection.videos.iter().enumerate()
         {
             // let selected = glam::ivec2(col as i32, row as i32) == selection.as_ivec2();
             let selected = row_selected && col as i32 == collection.selected_video;
@@ -628,7 +689,10 @@ unsafe fn draw_all_collections(
 
             if camera.is_rectangle_in_view(position, dimensions)
             {
-                // TODO: If waiting to load the image, draw the spinner instead
+                if !textures.contains_key(&video.url) && !failed.contains(&video.url)
+                {
+                    pending.insert(video.url.clone());
+                }
 
                 if selected
                 {
@@ -699,9 +763,9 @@ unsafe fn draw_all_spinners(
     }
 }
 
-async unsafe fn load_image_from_http(url: &str) -> Option<image::DynamicImage>
+async fn load_image_from_http(url: String) -> Option<image::DynamicImage>
 {
-    let bytes = reqwest::get(url).await.unwrap().bytes().await.unwrap();
+    let bytes = reqwest::get(url).await.ok()?.bytes().await.ok()?;
 
     let http_image =
         image::io::Reader::new(std::io::Cursor::new(bytes)).with_guessed_format().unwrap().decode().unwrap();
