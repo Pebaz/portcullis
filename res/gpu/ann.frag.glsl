@@ -1,4 +1,6 @@
 /*
+Author: Samuel Wilder https://www.shadertoy.com/view/stsXzr
+
 Hello World Shader
 Works on Shadertoy and in the Visual Studio Code extension:
 https://github.com/actarian/vscode-glsl-canvas

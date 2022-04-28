@@ -291,7 +291,12 @@ async fn main()
         let mut col_tweens = VecDeque::<AnimationSequence<f32>>::new();
 
         let mut showing_content = None;
-        let sdf_program = shaders::load_shader(&gl, shader_version, "res/gpu/hello.vert.glsl", "res/gpu/ann.frag.glsl");
+        let sdf_program = shaders::load_shader(
+            &gl,
+            shader_version,
+            "res/gpu/hello.vert.glsl",
+            "res/gpu/integer-raymarcher2.frag.glsl",
+        );
 
         while running
         {
@@ -565,19 +570,21 @@ async fn main()
 
             if showing_content.is_some()
             {
+                let content_dimensions = glam::vec2(window_width, window_height);
+
                 gl.use_program(showing_content);
 
                 let time = gl.get_uniform_location(showing_content.unwrap(), "time").unwrap();
                 gl.uniform_1_f32(Some(&time), time_milliseconds);
 
                 let resolution = gl.get_uniform_location(showing_content.unwrap(), "resolution").unwrap();
-                gl.uniform_2_f32(Some(&resolution), window_width, window_height);
+                gl.uniform_2_f32(Some(&resolution), content_dimensions.x, content_dimensions.y);
 
                 draw_quad(
                     &gl,
                     showing_content.unwrap(),
-                    glam::vec2(window_width / 4.0, window_height / 4.0),
-                    glam::vec2(window_width / 2.0, window_height / 2.0), // TODO(pbz): Scale this up with tween later
+                    glam::Vec2::ZERO,
+                    content_dimensions, // TODO(pbz): Scale this up with tween later
                     glam::Vec4::ONE,
                     camera.get_origin_matrix(),
                 );

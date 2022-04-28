@@ -16,24 +16,23 @@ float circle(vec2 point, vec2 origin, float radius)
 
 void main()
 {
+    color = vec4(gl_FragCoord.xy / resolution, 0.0, 1.0);
+
+    float dist = circle(
+        gl_FragCoord.xy,
+        resolution / 2 + vec2(sin(time * 2) * 100, cos(time * 2) * 100),
+        32
+    );
+
+    if (dist <= 0)
+    {
+        color = vec4(1, 1, 1, 1);
+    }
+
+    // Without this, the GPU compiler optimizes out the uniforms
     if (using_rectangle_texture > uint(0))
     {
         vec4 sample = texture(rectangle_texture, uv);
         color = sample * rectangle_color;
-    }
-    else
-    {
-        color = vec4(gl_FragCoord.xy / resolution, 0.0, 1.0);
-
-        float dist = circle(
-            gl_FragCoord.xy,
-            resolution / 2 + vec2(sin(time * 2) * 100, cos(time * 2) * 100),
-            32
-        );
-
-        if (dist <= 0)
-        {
-            color = vec4(1, 1, 1, 1);
-        }
     }
 }
