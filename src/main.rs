@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::future::Future;
 
 use glam;
@@ -26,27 +26,38 @@ struct Video
 struct TextureLibrary
 {
     textures: HashMap<String, NativeTexture>,
-    asset_load_futures: HashMap<String, Box<dyn Future<Output = Option<image::DynamicImage>>>>,
+    pending: HashSet<String>,
+    batches: Vec<String>,
+    // asset_load_futures: HashMap<String, Box<dyn Future<Output = Option<image::DynamicImage>>>>,
 }
 
 impl TextureLibrary
 {
     fn new() -> Self
     {
-        Self { textures: HashMap::new(), asset_load_futures: HashMap::new() }
+        Self {
+            textures: HashMap::new(),
+            pending: HashSet::new(),
+            batches: Vec::new(),
+            // current_batch:
+        }
     }
 
     fn fetch_unloaded_images(&mut self, collections: &Vec<Collection>)
     {
+        let mut batch = Vec::new();
+
+        batch.push(async { 1 });
+
         for collection in collections
         {
             for video in &collection.videos
             {
-                if !self.textures.contains_key(&video.url) && !self.asset_load_futures.contains_key(&video.url)
-                {
-                    self.asset_load_futures
-                        .insert(video.url.clone(), Box::new(load_image_from_http(video.url.clone())));
-                }
+                // if !self.textures.contains_key(&video.url) && !self.asset_load_futures.contains_key(&video.url)
+                // {
+                //     self.asset_load_futures
+                //         .insert(video.url.clone(), Box::new(load_image_from_http(video.url.clone())));
+                // }
             }
         }
     }
@@ -55,30 +66,6 @@ impl TextureLibrary
 async fn load_image_from_http(url: String) -> Option<image::DynamicImage>
 {
     None
-}
-
-async fn fulfill_requests(texture_library: &mut TextureLibrary)
-{
-    // Only using 31% of the frame budget of 16 ms at 60 FPS
-    let timeout = tokio::time::sleep(tokio::time::Duration::from_millis(5));
-    tokio::pin!(timeout);
-
-    // if !collections.is_some()
-    // {
-    //     tokio::select! {
-    //         _ = &mut timeout => (),
-    //         collections_results = &mut collections_future =>
-    //         {
-    //             println!("HTTP Request completed! Len: {}", collections_results.len());
-
-    //             collections = Some(collections_results);
-    //         },
-    //     };
-    // }
-
-    let mut foo = Vec::new();
-
-    foo.push(async { 1 });
 }
 
 fn handle_item(item: &Value, aspect_ratio: f32) -> Video
@@ -316,7 +303,7 @@ async fn main()
         let mut running = true;
         let time_counter_milliseconds = std::time::Instant::now();
 
-        let mut collections = None;
+        let mut collections: Option<Vec<Collection>> = None;
 
         let mut camera = Camera2D::new();
         camera.update_viewport_dimensions(STARTING_WINDOW_WIDTH, STARTING_WINDOW_HEIGHT);
@@ -348,6 +335,25 @@ async fn main()
 
         let mut texture_library = TextureLibrary::new();
 
+        let mut textures: HashMap<String, NativeTexture> = HashMap::new();
+        let mut pending: HashSet<String> = HashSet::new();
+
+        let http_texture = async {
+            let bytes = reqwest::get("https://prod-ripcut-delivery.disney-plus.net/v1/variant/disney/9F9C4A480357CD8D21E2C675B146D40782B92F570660B028AC7FA149E21B88D2/scale?format=jpeg&quality=90&scalingAlgorithm=lanczos3&width=500")
+                .await
+                .unwrap()
+                .bytes()
+                .await
+                .unwrap();
+
+            let http_image = image::io::Reader::new(std::io::Cursor::new(bytes)).with_guessed_format()
+                .unwrap()
+                .decode()
+                .unwrap();
+
+            upload_image_to_gpu(&gl, http_image)
+        }.await;
+
         while running
         {
             // Only using 31% of the frame budget of 16 ms at 60 FPS
@@ -356,7 +362,20 @@ async fn main()
 
             if let Some(ref collections) = collections
             {
-                texture_library.fetch_unloaded_images(collections);
+                // texture_library.fetch_unloaded_images(collections);
+
+                for collection in collections
+                {
+                    for video in &collection.videos
+                    {
+                        if !textures.contains_key(&video.url) && !pending.contains(&video.url)
+                        {}
+                        // !self.asset_load_futures.contains_key(&video.url) {
+                        //     self.asset_load_futures
+                        //         .insert(video.url.clone(), Box::new(load_image_from_http(video.url.clone())));
+                        // }
+                    }
+                }
             }
             else
             {
@@ -468,6 +487,16 @@ async fn main()
                 glam::vec4(1.0, 1.0, 1.0, 1.0),
                 origin_matrix,
                 disney_logo_texture,
+            );
+
+            draw_quad_textured(
+                &gl,
+                program,
+                glam::vec2(0.0, 0.0),
+                glam::vec2(256.0, 128.0),
+                glam::vec4(1.0, 1.0, 1.0, 1.0),
+                origin_matrix,
+                http_texture,
             );
 
             glyph_brush.queue(Section {
