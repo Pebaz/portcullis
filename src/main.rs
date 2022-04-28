@@ -253,38 +253,7 @@ async fn main()
             gl.delete_shader(shader);
         }
 
-        gl.use_program(Some(program));
-
-        gl.clear_color(0.1, 0.2, 0.3, 1.0);
-
-        // let image = image::open("res/img/Disney-Logo.png").unwrap();
-        let image = image::open("res/logo/Portcullis.png").unwrap();
-        let width = image.width();
-        let height = image.height();
-        let data = image.into_rgba8();
-        let data2 = data.into_vec();
-
-        let texture = gl.create_texture().unwrap();
-
-        gl.bind_texture(glow::TEXTURE_2D, Some(texture));
-
-        gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MIN_FILTER, glow::LINEAR as i32);
-        gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MAG_FILTER, glow::LINEAR as i32);
-
-        gl.tex_image_2d(
-            glow::TEXTURE_2D,
-            0,
-            glow::RGBA8 as i32,
-            width as i32,
-            height as i32,
-            0,
-            glow::RGBA,
-            glow::UNSIGNED_BYTE,
-            Some(&data2),
-        );
-
-        gl.generate_mipmap(glow::TEXTURE_2D);
-        gl.bind_texture(glow::TEXTURE_2D, None);
+        gl.clear_color(0.0980392156862745, 0.129411764705882, 0.180392156862745, 1.0);
 
         let font = ab_glyph::FontArc::try_from_slice(include_bytes!("../res/font/Roboto/Roboto-Regular.ttf")).unwrap();
         let mut glyph_brush = GlyphBrushBuilder::using_font(font).build(&gl);
@@ -303,6 +272,24 @@ async fn main()
         tokio::pin!(collections_future);
 
         let mut selection = glam::Vec2::ZERO;
+
+        let disney_logo = image::io::Reader::new(std::io::Cursor::new(include_bytes!("../res/img/Disney-Logo.png")))
+            .with_guessed_format()
+            .unwrap()
+            .decode()
+            .unwrap();
+        let disney_logo_dims = glam::vec2(disney_logo.width() as f32, disney_logo.height() as f32);
+        let disney_logo_texture = upload_image_to_gpu(&gl, disney_logo);
+
+        let spinner = image::io::Reader::new(std::io::Cursor::new(include_bytes!("../res/img/Spinner.png")))
+            .with_guessed_format()
+            .unwrap()
+            .decode()
+            .unwrap();
+        let spinner_dims = glam::vec2(spinner.width() as f32, spinner.height() as f32);
+        let spinner_texture = upload_image_to_gpu(&gl, spinner);
+
+        // let mut spinners = Vec::new();
 
         while running
         {
@@ -410,16 +397,18 @@ async fn main()
 
             gl.use_program(Some(program));
 
-            let logo_dims = glam::vec2(512.0, 256.0);
             let origin_matrix = camera.get_origin_matrix();
             draw_quad_textured(
                 &gl,
                 program,
-                glam::vec2(window_width / 2.0 - (logo_dims.x / 2.0), window_height / 2.0 - (logo_dims.y / 2.0)),
-                logo_dims,
+                glam::vec2(
+                    window_width / 2.0 - (disney_logo_dims.x / 2.0),
+                    window_height / 2.0 - (disney_logo_dims.y / 2.0),
+                ),
+                disney_logo_dims * 0.5,
                 glam::vec4(1.0, 1.0, 1.0, 1.0),
                 origin_matrix,
-                texture,
+                disney_logo_texture,
             );
 
             glyph_brush.queue(Section {
@@ -551,11 +540,12 @@ unsafe fn draw_all_collections(
             {
                 if selected
                 {
+                    let selection_border_size = 8.0;
                     draw_quad(
                         &gl,
                         program,
-                        position - glam::vec2(16.0, 16.0),
-                        dimensions + (glam::vec2(16.0, 16.0) * 2.0),
+                        position - glam::vec2(selection_border_size, selection_border_size),
+                        dimensions + (glam::vec2(selection_border_size, selection_border_size) * 2.0),
                         glam::vec4(1.0, 1.0, 1.0, 0.75),
                         camera.get_matrix(),
                     );
@@ -565,6 +555,44 @@ unsafe fn draw_all_collections(
             }
         }
     }
+}
+
+// ❓ Possibly useful later
+// fn load_image_from_file(filename: &str) -> Option<(u32, u32, Vec<u8>)>
+// {
+//     let image = image::open(filename).unwrap();
+//     let width = image.width();
+//     let height = image.height();
+//     let pixel_data = image.into_rgba8().into_vec();
+
+//     Some((width, height, pixel_data))
+// }
+
+unsafe fn upload_image_to_gpu(gl: &Context, image: image::DynamicImage) -> NativeTexture
+{
+    let texture = gl.create_texture().unwrap();
+
+    gl.bind_texture(glow::TEXTURE_2D, Some(texture));
+
+    gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MIN_FILTER, glow::LINEAR as i32);
+    gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MAG_FILTER, glow::LINEAR as i32);
+
+    gl.tex_image_2d(
+        glow::TEXTURE_2D,
+        0,
+        glow::RGBA8 as i32,
+        image.width() as i32,
+        image.height() as i32,
+        0,
+        glow::RGBA,
+        glow::UNSIGNED_BYTE,
+        Some(&image.into_rgba8().into_vec()),
+    );
+
+    gl.generate_mipmap(glow::TEXTURE_2D);
+    gl.bind_texture(glow::TEXTURE_2D, None);
+
+    texture
 }
 
 #[cfg(test)]
