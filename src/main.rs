@@ -104,9 +104,7 @@ fn handle_item(item: &Value, aspect_ratio: f32) -> Video
         &appropriate_tiles[content_type]["default"]["url"]
     };
 
-    // println!("{}: {}", item_name, tile_url);
-
-    Video { name: item_name.to_string(), url: tile_url.to_string() }
+    Video { name: item_name.to_string(), url: tile_url.as_str().unwrap().to_owned() }
 }
 
 async fn get_collections(aspect_ratio: f32) -> Vec<Collection>
@@ -406,33 +404,6 @@ async fn main()
             {
                 current_job = None;
             }
-
-            // if let Some(ref mut future) = current_job
-            // {
-            //     // Only using 31% of the frame budget of 16 ms at 60 FPS
-            //     let timeout = tokio::time::sleep(tokio::time::Duration::from_millis(5));
-            //     tokio::pin!(timeout);
-
-            //     tokio::select! {
-            //         _ = &mut timeout => (),
-
-            //         http_image = &mut future =>
-            //         {
-            //             // textures.insert(current_url.unwrap().clone(), http_image.unwrap());
-            //             current_url = None;
-            //         },
-            //     };
-            // }
-
-            // if current_url.is_none()
-            // {
-            //     for url in pending.iter()
-            //     {
-            //         current_job = Some(std::rc::Rc::new(load_image_from_http(url.clone())));
-            //         current_url = Some(url.clone());
-            //         break;
-            //     }
-            // }
 
             let time_milliseconds = time_counter_milliseconds.elapsed().as_millis() as f32 / 1000.0;
 
@@ -765,12 +736,41 @@ unsafe fn draw_all_spinners(
 
 async fn load_image_from_http(url: String) -> Option<image::DynamicImage>
 {
-    let bytes = reqwest::get(url).await.ok()?.bytes().await.ok()?;
+    let url = &url;
 
-    let http_image =
-        image::io::Reader::new(std::io::Cursor::new(bytes)).with_guessed_format().unwrap().decode().unwrap();
-
-    Some(http_image)
+    match reqwest::get(url).await
+    {
+        Ok(request) => match request.bytes().await
+        {
+            Ok(bytes) => match image::io::Reader::new(std::io::Cursor::new(bytes)).with_guessed_format()
+            {
+                Ok(http_image_bytes) => match http_image_bytes.decode()
+                {
+                    Ok(http_image) => Some(http_image),
+                    Err(err) =>
+                    {
+                        println!("  Err(4): {:?} {}", err, url);
+                        None
+                    }
+                },
+                Err(err) =>
+                {
+                    println!("  Err(3): {:?} {}", err, url);
+                    None
+                }
+            },
+            Err(err) =>
+            {
+                println!("  Err(2): {:?} {}", err, url);
+                None
+            }
+        },
+        Err(err) =>
+        {
+            println!("  Err(1): {:?} {}", err, url);
+            None
+        }
+    }
 }
 
 #[cfg(test)]
