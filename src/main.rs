@@ -565,6 +565,12 @@ async fn main()
             {
                 gl.use_program(showing_content);
 
+                let time = gl.get_uniform_location(showing_content.unwrap(), "time").unwrap();
+                gl.uniform_1_f32(Some(&time), time_milliseconds);
+
+                let resolution = gl.get_uniform_location(showing_content.unwrap(), "resolution").unwrap();
+                gl.uniform_2_f32(Some(&resolution), window_width, window_height);
+
                 draw_quad(
                     &gl,
                     showing_content.unwrap(),
