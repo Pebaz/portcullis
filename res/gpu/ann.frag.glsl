@@ -1,33 +1,99 @@
 /*
-Samuel Wilder
+Hello World Shader
+Works on Shadertoy and in the Visual Studio Code extension:
+https://github.com/actarian/vscode-glsl-canvas
 */
 
-precision mediump float;
+////////////////////////////////////////////////////////////////////////////////
+// Cross-Platform SDF Header
+////////////////////////////////////////////////////////////////////////////////
 
-in vec2 uv;
-out vec4 color;
+// Uncomment to deploy to Shadertoy
+// #define SHADERTOY
 
-uniform vec4 rectangle_color;
-uniform uint using_rectangle_texture;
-uniform vec2 resolution;
-uniform float time;
-uniform sampler2D rectangle_texture;
+// Uncomment to deploy to Win32
+// #version 430 core
+#define DISNEY
 
+// -----------------------------------------------------------------------------
 void fragment(vec2 uv, out vec3 color);
 
-void main()
-{
-    vec2 uv = (2.0 * gl_FragCoord.xy - resolution.xy) / resolution.y;
-    vec3 final_color = vec3(0);
-    fragment(uv, final_color);
-    color = vec4(final_color, 1);
+#ifdef SHADERTOY
+    #define resolution iResolution
+    #define time iTime
+    #define mouse
 
-    if (using_rectangle_texture > uint(0))
+    void mainImage(out vec4 out_color, in vec2 frag_coord)
     {
-        vec4 sample = texture(rectangle_texture, uv);
-        color = sample * rectangle_color;
+        vec2 uv = (2.0 * frag_coord.xy - resolution.xy) / resolution.y;
+        vec3 color = vec3(0);
+        fragment(uv, color);
+        out_color = vec4(color, 1);
     }
-}
+
+#elif defined(DISNEY)
+    precision mediump float;
+
+    in vec2 uv;
+    out vec4 color;
+
+    uniform vec4 rectangle_color;
+    uniform uint using_rectangle_texture;
+    uniform vec2 resolution;
+    uniform float time;
+    uniform sampler2D rectangle_texture;
+
+    void fragment(vec2 uv, out vec3 color);
+
+    void main()
+    {
+        vec2 uv = (2.0 * gl_FragCoord.xy - resolution.xy) / resolution.y;
+        vec3 final_color = vec3(0);
+        fragment(uv, final_color);
+        color = vec4(final_color, 1);
+
+        // Without this, the GPU compiler optimizes out the uniforms
+        if (using_rectangle_texture > uint(0))
+        {
+            vec4 sample = texture(rectangle_texture, uv);
+            color = sample * rectangle_color;
+        }
+    }
+
+#elif defined(WIN32)
+    out vec4 color;
+
+    uniform vec2 resolution;
+    uniform float time;
+
+    void main()
+    {
+        vec2 uv = (2.0 * gl_FragCoord.xy - resolution.xy) / resolution.y;
+        vec3 final_color = vec3(0);
+        fragment(uv, final_color);
+        color = vec4(final_color, 1);
+    }
+
+#else  // VS Code
+    precision mediump float;
+
+    uniform vec2 u_resolution;
+    uniform float u_time;
+    uniform sampler2D u_texture_0;
+    uniform sampler2D u_texture_1;
+
+    #define resolution u_resolution
+    #define time u_time
+    #define mouse
+
+    void main()
+    {
+        vec2 uv = (2.0 * gl_FragCoord.xy - resolution.xy) / resolution.y;
+        vec3 color = vec3(0);
+        fragment(uv, color);
+        gl_FragColor = vec4(color, 1);
+    }
+#endif
 
 const int max_steps = 100;
 const float max_distance = 5.0;
