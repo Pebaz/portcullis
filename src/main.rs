@@ -289,7 +289,7 @@ async fn main()
         let spinner_dims = glam::vec2(spinner.width() as f32, spinner.height() as f32);
         let spinner_texture = upload_image_to_gpu(&gl, spinner);
 
-        // let mut spinners = Vec::new();
+        let mut spinners = Vec::new();
 
         while running
         {
@@ -398,14 +398,12 @@ async fn main()
             gl.use_program(Some(program));
 
             let origin_matrix = camera.get_origin_matrix();
+            let smaller_dims = disney_logo_dims * 0.5;
             draw_quad_textured(
                 &gl,
                 program,
-                glam::vec2(
-                    window_width / 2.0 - (disney_logo_dims.x / 2.0),
-                    window_height / 2.0 - (disney_logo_dims.y / 2.0),
-                ),
-                disney_logo_dims * 0.5,
+                glam::vec2(window_width / 2.0 - (smaller_dims.x / 2.0), window_height / 2.0 - (smaller_dims.y / 2.0)),
+                smaller_dims,
                 glam::vec4(1.0, 1.0, 1.0, 1.0),
                 origin_matrix,
                 disney_logo_texture,
@@ -421,10 +419,14 @@ async fn main()
                 ..Section::default()
             });
 
+            spinners.clear();
+
             if let Some(ref collections) = collections
             {
-                draw_all_collections(collections, &gl, program, &camera, &mut glyph_brush, selection);
+                draw_all_collections(collections, &gl, program, &camera, &mut glyph_brush, selection, &mut spinners);
             }
+
+            draw_all_spinners(&gl, program, &camera, &spinners, spinner_texture, spinner_dims);
 
             glyph_brush.draw_queued(&gl, window_width as u32, window_height as u32).expect("Draw queued");
 
@@ -501,6 +503,7 @@ unsafe fn draw_all_collections(
     camera: &Camera2D,
     glyph_brush: &mut glow_glyph::GlyphBrush,
     selection: glam::Vec2,
+    spinners: &mut Vec<glam::Vec2>,
 )
 {
     let row_height = camera.viewport.y / 4.0;
@@ -538,6 +541,8 @@ unsafe fn draw_all_collections(
 
             if camera.is_rectangle_in_view(position, dimensions)
             {
+                // TODO: If waiting to load the image, draw the spinner instead
+
                 if selected
                 {
                     let selection_border_size = 8.0;
@@ -593,6 +598,29 @@ unsafe fn upload_image_to_gpu(gl: &Context, image: image::DynamicImage) -> Nativ
     gl.bind_texture(glow::TEXTURE_2D, None);
 
     texture
+}
+
+unsafe fn draw_all_spinners(
+    gl: &Context,
+    program: NativeProgram,
+    camera: &Camera2D,
+    spinners: &Vec<glam::Vec2>,
+    spinner_texture: NativeTexture,
+    spinner_dims: glam::Vec2,
+)
+{
+    for spinner in spinners
+    {
+        draw_quad_textured(
+            &gl,
+            program,
+            *spinner,
+            spinner_dims,
+            glam::vec4(1.0, 1.0, 1.0, 1.0),
+            camera.get_matrix(),
+            spinner_texture,
+        );
+    }
 }
 
 #[cfg(test)]
