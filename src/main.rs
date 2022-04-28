@@ -1,13 +1,34 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 
 use glam;
 use glow::*;
 use glow_glyph::{ab_glyph, GlyphBrushBuilder, Section, Text};
+use keyframe::{functions, keyframes, AnimationSequence};
+use keyframe_derive::CanTween;
 use sdl2::event::{Event, WindowEvent};
 use sdl2::keyboard::Keycode;
 use serde_json::Value;
 
 mod shaders;
+
+#[derive(Clone, Copy, Default, CanTween)]
+struct V2(f32, f32);
+
+impl Into<glam::Vec2> for V2
+{
+    fn into(self) -> glam::Vec2
+    {
+        glam::vec2(self.0, self.1)
+    }
+}
+
+impl Into<V2> for glam::Vec2
+{
+    fn into(self) -> V2
+    {
+        V2(self.x, self.y)
+    }
+}
 
 #[derive(Clone)]
 struct Collection
@@ -257,6 +278,7 @@ async fn main()
         let mut current_job = None;
         let mut current_url: Option<String> = None;
 
+        // TODO: Remove test draw calls
         let http_texture = async {
             let http_image = load_image_from_http("https://prod-ripcut-delivery.disney-plus.net/v1/variant/disney/9F9C4A480357CD8D21E2C675B146D40782B92F570660B028AC7FA149E21B88D2/scale?format=jpeg&quality=90&scalingAlgorithm=lanczos3&width=500".to_string())
                 .await
@@ -265,12 +287,30 @@ async fn main()
             upload_image_to_gpu(&gl, http_image)
         }.await;
 
+        let mut camera_tweens = VecDeque::<AnimationSequence<V2>>::new();
+
+        #[rustfmt::skip]
+        camera_tweens.push_back(
+            keyframes![
+                (V2(0.0, 0.0), 0.0, functions::EaseInOut),
+                (V2(256.0, 0.0), 10.0, functions::EaseInOut)
+            ]
+        );
+
+        #[rustfmt::skip]
+        camera_tweens.push_back(
+            keyframes![
+                (V2(256.0, 0.0), 0.0, functions::EaseInOut),
+                (V2(0.0, 0.0), 4.0, functions::EaseInOut)
+            ]
+        );
+
         while running
         {
             if collections.is_none()
             {
                 // Only using 31% of the frame budget of 16 ms at 60 FPS
-                let timeout = tokio::time::sleep(tokio::time::Duration::from_millis(5));
+                let timeout = tokio::time::sleep(tokio::time::Duration::from_millis(1));
                 tokio::pin!(timeout);
 
                 tokio::select! {
@@ -289,7 +329,7 @@ async fn main()
             if let Some(ref mut current_job) = current_job
             {
                 // Only using 31% of the frame budget of 16 ms at 60 FPS
-                let timeout = tokio::time::sleep(tokio::time::Duration::from_millis(5));
+                let timeout = tokio::time::sleep(tokio::time::Duration::from_millis(1));
                 tokio::pin!(timeout);
 
                 tokio::select! {
@@ -331,8 +371,23 @@ async fn main()
             }
 
             let time_milliseconds = time_counter_milliseconds.elapsed().as_millis() as f32 / 1000.0;
-            let time_delta = time_counter_delta.elapsed().as_millis() as f32;
+            let time_delta = time_counter_delta.elapsed().as_millis() as f32 / 1000.0;
             time_counter_delta = std::time::Instant::now();
+
+            if camera_tweens.len() > 0
+            {
+                if camera_tweens[0].finished()
+                {
+                    camera_tweens.pop_front();
+                }
+                else
+                {
+                    camera_tweens[0].advance_by(time_delta as f64);
+                    camera.position = camera_tweens[0].now().into();
+
+                    println!("CAM: {}", camera.position);
+                }
+            }
 
             for event in events_loop.poll_iter()
             {
