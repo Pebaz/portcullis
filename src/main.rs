@@ -294,7 +294,6 @@ async fn main()
         {
             if collections.is_none()
             {
-                // Only using 31% of the frame budget of 16 ms at 60 FPS
                 let timeout = tokio::time::sleep(tokio::time::Duration::from_millis(1));
                 tokio::pin!(timeout);
 
@@ -313,10 +312,10 @@ async fn main()
             let mut job_complete = false;
             if let Some(ref mut current_job) = current_job
             {
-                // Only using 31% of the frame budget of 16 ms at 60 FPS
                 let timeout = tokio::time::sleep(tokio::time::Duration::from_millis(1));
                 tokio::pin!(timeout);
 
+                // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
                 // tokio::select! {
                 //     _ = &mut timeout => (),
 
@@ -339,6 +338,7 @@ async fn main()
                 //         job_complete = true;
                 //     },
                 // };
+                // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
             }
             else
             {
