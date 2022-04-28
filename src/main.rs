@@ -246,7 +246,7 @@ async fn main()
             .unwrap()
             .decode()
             .unwrap();
-        let spinner_dims = glam::vec2(spinner.width() as f32, spinner.height() as f32);
+        // let spinner_dims = glam::vec2(spinner.width() as f32, spinner.height() as f32);
         let spinner_texture = upload_image_to_gpu(&gl, spinner);
         let mut spinner_rotation_angle_degrees: f32 = 0.0;
         let mut spinners = Vec::new();
@@ -383,6 +383,9 @@ async fn main()
                             {
                                 selection.y = 0.0;
                             }
+
+                            let row_height = camera.viewport.y / 4.0;
+                            camera.position.y = selection.y * row_height;
                         }
                     }
 
@@ -396,6 +399,9 @@ async fn main()
                             {
                                 selection.y = collections.len() as f32 - 1.0;
                             }
+
+                            let row_height = camera.viewport.y / 4.0;
+                            camera.position.y = selection.y * row_height;
                         }
                     }
 
