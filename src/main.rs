@@ -297,7 +297,7 @@ async fn main()
             &gl,
             shader_version,
             "res/gpu/hello.vert.glsl",
-            "res/gpu/integer-raymarcher2.frag.glsl",
+            "res/gpu/raymarching-primitives.frag.glsl",
         );
 
         while running
