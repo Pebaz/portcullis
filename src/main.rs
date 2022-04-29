@@ -314,6 +314,13 @@ async fn main()
 
             let mut add_content = |s| vec.push(shaders::load_shader(&gl, shader_version, "res/gpu/hello.vert.glsl", s));
 
+            add_content("res/gpu/julia-traps.frag.glsl");
+            add_content("res/gpu/clover.frag.glsl");
+            add_content("res/gpu/iterations-coral.frag.glsl");
+            add_content("res/gpu/eye.frag.glsl");
+            add_content("res/gpu/cubic-bezier3d.frag.glsl");
+            add_content("res/gpu/cylinder.frag.glsl");
+            add_content("res/gpu/cubic-bezier.frag.glsl");
             add_content("res/gpu/slisesix.frag.glsl");
             add_content("res/gpu/iterations-shiny.frag.glsl");
             add_content("res/gpu/sierpinski.frag.glsl");
