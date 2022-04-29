@@ -259,6 +259,19 @@ async fn main()
         let all_content = {
             let mut vec = Vec::new();
 
+            vec.push(shaders::load_shader(
+                &gl,
+                shader_version,
+                "res/gpu/hello.vert.glsl",
+                "res/gpu/two-tweets.frag.glsl",
+            ));
+
+            vec.push(shaders::load_shader(
+                &gl,
+                shader_version,
+                "res/gpu/hello.vert.glsl",
+                "res/gpu/happy-jumping.frag.glsl",
+            ));
             vec.push(shaders::load_shader(&gl, shader_version, "res/gpu/hello.vert.glsl", "res/gpu/ann.frag.glsl"));
             vec.push(shaders::load_shader(&gl, shader_version, "res/gpu/hello.vert.glsl", "res/gpu/sdf.frag.glsl"));
             vec.push(shaders::load_shader(

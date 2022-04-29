@@ -130,7 +130,6 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord )
     fragColor = vec4( col, 1.0 );
 }
 
-
 void main()
 {
     vec2 uv = (2.0 * gl_FragCoord.xy - resolution.xy) / resolution.y;
