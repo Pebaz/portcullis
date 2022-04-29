@@ -11,7 +11,7 @@ use serde_json::Value;
 
 mod shaders;
 
-const RUN_LOCAL: bool = true; // Use local home.json copy, don't load images
+const RUN_LOCAL: bool = false; // Use local home.json copy, don't load images
 
 #[derive(Clone, Copy, Default, CanTween)]
 struct V2(f32, f32);
@@ -220,8 +220,6 @@ const STARTING_WINDOW_HEIGHT: f32 = 768.0;
 #[tokio::main]
 async fn main()
 {
-    // !!!!!!!!!!!!!!!!!!!!!!!!! tokio::yield_now();
-
     unsafe {
         let (gl, shader_version, window, mut events_loop, _context) = {
             let sdl = sdl2::init().unwrap();
@@ -263,7 +261,12 @@ async fn main()
         let mut camera = Camera2D::new();
         camera.update_viewport_dimensions(STARTING_WINDOW_WIDTH, STARTING_WINDOW_HEIGHT);
 
-        let aspect_ratio = STARTING_WINDOW_HEIGHT / STARTING_WINDOW_WIDTH;
+        // let aspect_ratio = STARTING_WINDOW_HEIGHT / STARTING_WINDOW_WIDTH;
+        let aspect_ratio = {
+            let row_cell_height = camera.viewport.y / 6.0;
+            let col_cell_width = camera.viewport.x / 6.0;
+            row_cell_height / col_cell_width
+        };
 
         let collections_future = get_collections(aspect_ratio);
         tokio::pin!(collections_future);
@@ -293,15 +296,6 @@ async fn main()
         let mut failed: HashSet<String> = HashSet::new(); // TODO: Don't repeatedly attempt 404s
         let mut current_job = None;
         let mut current_url: Option<String> = None;
-
-        // TODO: Remove test draw calls
-        let http_texture = async {
-            let http_image = load_image_from_http("https://prod-ripcut-delivery.disney-plus.net/v1/variant/disney/9F9C4A480357CD8D21E2C675B146D40782B92F570660B028AC7FA149E21B88D2/scale?format=jpeg&quality=90&scalingAlgorithm=lanczos3&width=500".to_string())
-                .await
-                .unwrap();
-
-            upload_image_to_gpu(&gl, http_image)
-        }.await;
 
         let mut camera_tweens = VecDeque::<AnimationSequence<V2>>::new();
         let mut col_tweens = VecDeque::<AnimationSequence<f32>>::new();
@@ -553,7 +547,10 @@ async fn main()
                             //     ]
                             // );
 
-                            let row_height = camera.viewport.y / 4.0;
+                            let row_cell_height = camera.viewport.y / 6.0;
+                            let title_height = row_cell_height / 5.0;
+                            let row_margin = row_cell_height / 5.0;
+                            let row_height = title_height + row_cell_height + row_margin;
                             // camera.position.y = selection.y * row_height;
 
                             let origin = camera.position;
@@ -594,7 +591,10 @@ async fn main()
 
                             selection.x = col_target as f32;
 
-                            let row_height = camera.viewport.y / 4.0;
+                            let row_cell_height = camera.viewport.y / 6.0;
+                            let title_height = row_cell_height / 5.0;
+                            let row_margin = row_cell_height / 5.0;
+                            let row_height = title_height + row_cell_height + row_margin;
                             // camera.position.y = selection.y * row_height;
 
                             let origin = camera.position;
@@ -865,15 +865,20 @@ unsafe fn draw_all_collections(
     failed: &HashSet<String>,
 )
 {
-    let row_height = camera.viewport.y / 4.0;
-    let title_height = row_height / 5.0;
+    let global_margin = 16.0;
+
+    let row_cell_height = camera.viewport.y / 6.0;
+    let title_height = row_cell_height / 5.0;
+    let row_margin = row_cell_height / 5.0;
+    let row_height = title_height + row_cell_height + row_margin;
 
     for (row, collection) in collections.iter().enumerate()
     {
-        let row_y = row as f32 * row_height;
+        let row_y = row as f32 * row_height + global_margin;
+
         let title = collection.name.as_str();
         let title_section = Section {
-            screen_position: camera.get_position_in_screen_space(glam::vec2(30.0, row_y)).into(),
+            screen_position: camera.get_position_in_screen_space(glam::vec2(24.0, row_y - 14.0)).into(),
             bounds: camera.viewport.into(),
             text: vec![Text::default().with_text(title).with_color([1.0, 1.0, 1.0, 1.0]).with_scale(40.0)],
             ..Section::default()
@@ -894,9 +899,9 @@ unsafe fn draw_all_collections(
             let col_y = row_y + title_height;
             let selection_offset_x =
                 if row_selected { selection.x * col_width } else { collection.selected_video as f32 * col_width };
-            let col_x = col as f32 * col_width - selection_offset_x;
+            let col_x = col as f32 * col_width - selection_offset_x + global_margin;
             let position = glam::vec2(col_x, col_y);
-            let dimensions = glam::vec2(col_margin + col_cell_width, row_height - title_height);
+            let dimensions = glam::vec2(col_margin + col_cell_width, row_height - title_height - row_margin);
 
             if camera.is_rectangle_in_view(position, dimensions)
             {
@@ -1071,14 +1076,3 @@ mod test
         assert_eq!(camera.is_rectangle_in_view(glam::vec2(1000.0, 1000.0), glam::vec2(64.0, 64.0)), false);
     }
 }
-
-// ❓ Possibly useful later
-// fn load_image_from_file(filename: &str) -> Option<(u32, u32, Vec<u8>)>
-// {
-//     let image = image::open(filename).unwrap();
-//     let width = image.width();
-//     let height = image.height();
-//     let pixel_data = image.into_rgba8().into_vec();
-
-//     Some((width, height, pixel_data))
-// }
