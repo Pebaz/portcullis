@@ -273,11 +273,12 @@ async fn main()
 
         let mut selection = glam::Vec2::ZERO;
 
-        let disney_logo = image::io::Reader::new(std::io::Cursor::new(include_bytes!("../res/img/Disney-Logo.png")))
-            .with_guessed_format()
-            .unwrap()
-            .decode()
-            .unwrap();
+        let disney_logo =
+            image::io::Reader::new(std::io::Cursor::new(include_bytes!("../res/img/DisneyPlus-Logo.png")))
+                .with_guessed_format()
+                .unwrap()
+                .decode()
+                .unwrap();
         let disney_logo_dims = glam::vec2(disney_logo.width() as f32, disney_logo.height() as f32);
         let disney_logo_texture = upload_image_to_gpu(&gl, disney_logo);
 
@@ -291,9 +292,9 @@ async fn main()
         let mut spinner_rotation_angle_degrees: f32 = 0.0;
         let mut spinners = Vec::new();
 
-        let mut textures: HashMap<String, NativeTexture> = HashMap::new();
-        let mut pending: HashSet<String> = HashSet::new();
-        let mut failed: HashSet<String> = HashSet::new(); // TODO: Don't repeatedly attempt 404s
+        let mut textures: HashMap<String, NativeTexture> = HashMap::new();  // Successfully loaded textures
+        let mut pending: HashSet<String> = HashSet::new();  // Any pending, non-current jobs
+        let mut failed: HashSet<String> = HashSet::new();  // Prevents repeated fetches for failed images
         let mut current_job = None;
         let mut current_url: Option<String> = None;
 
@@ -686,15 +687,18 @@ async fn main()
                 disney_logo_texture,
             );
 
-            glyph_brush.queue(Section {
-                screen_position: camera.get_position_in_screen_space(glam::vec2(0.0, 0.0)).into(),
-                bounds: camera.viewport.into(),
-                text: vec![Text::default()
-                    .with_text(format!("{}", time_milliseconds).as_str())
-                    .with_color([1.0, 1.0, 1.0, 1.0])
-                    .with_scale(12.0)],
-                ..Section::default()
-            });
+            if RUN_LOCAL
+            {
+                glyph_brush.queue(Section {
+                    screen_position: camera.get_position_in_screen_space(glam::vec2(0.0, 0.0)).into(),
+                    bounds: camera.viewport.into(),
+                    text: vec![Text::default()
+                        .with_text(format!("{}", time_milliseconds).as_str())
+                        .with_color([1.0, 1.0, 1.0, 1.0])
+                        .with_scale(12.0)],
+                    ..Section::default()
+                });
+            }
 
             spinners.clear();
             spinner_rotation_angle_degrees += time_delta * 100.0;

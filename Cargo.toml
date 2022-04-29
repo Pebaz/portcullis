@@ -3,16 +3,14 @@ name = "portcullis"
 version = "0.1.0"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
-glow = "0.11.2"
-sdl2 = { version = "0.35.2", features = ["bundled"] }
-glam = "0.20.5"
-image = "0.24.2"
-glow_glyph = "0.5.0"
-tokio = { version = "1", features = ["full"] }
-reqwest = "0.11.10"
-serde_json = "1.0.79"
-keyframe = "1.0.4"
-keyframe_derive = "1.0.0"
+glow = "0.11.2"  # "GL On Whatever"
+sdl2 = { version = "0.35.2", features = ["bundled"] }  # Windowing library
+glam = "0.20.5"  # Fast math library
+image = "0.24.2"  # Load images from formatted byte buffers
+glow_glyph = "0.5.0"  # Draw text using TTF fonts
+tokio = { version = "1", features = ["full"] }  # Async runtime
+reqwest = "0.11.10"  # Make HTTP requests
+serde_json = "1.0.79"  # Load JSON
+keyframe = "1.0.4"  # Interpolation library
+keyframe_derive = "1.0.0"  # Ability to define custom tweenable types
