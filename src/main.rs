@@ -548,7 +548,7 @@ async fn main()
                             // );
 
                             let row_cell_height = camera.viewport.y / 6.0;
-                            let title_height = row_cell_height / 5.0;
+                            let title_height = row_cell_height / 4.0;
                             let row_margin = row_cell_height / 5.0;
                             let row_height = title_height + row_cell_height + row_margin;
                             // camera.position.y = selection.y * row_height;
@@ -592,7 +592,7 @@ async fn main()
                             selection.x = col_target as f32;
 
                             let row_cell_height = camera.viewport.y / 6.0;
-                            let title_height = row_cell_height / 5.0;
+                            let title_height = row_cell_height / 4.0;
                             let row_margin = row_cell_height / 5.0;
                             let row_height = title_height + row_cell_height + row_margin;
                             // camera.position.y = selection.y * row_height;
@@ -868,7 +868,7 @@ unsafe fn draw_all_collections(
     let global_margin = 16.0;
 
     let row_cell_height = camera.viewport.y / 6.0;
-    let title_height = row_cell_height / 5.0;
+    let title_height = row_cell_height / 4.0;
     let row_margin = row_cell_height / 5.0;
     let row_height = title_height + row_cell_height + row_margin;
 
@@ -912,7 +912,7 @@ unsafe fn draw_all_collections(
 
                 if selected
                 {
-                    let selection_border_size = 8.0;
+                    let selection_border_size = 4.0;
                     draw_quad(
                         &gl,
                         program,
