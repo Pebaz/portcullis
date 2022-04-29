@@ -1,4 +1,6 @@
 use std::collections::{HashMap, HashSet, VecDeque};
+use std::iter::Cycle;
+use std::ops::Range;
 
 use glam;
 use glow::*;
@@ -43,9 +45,10 @@ struct Video
 {
     _name: String,
     url: String,
+    content_index: usize,
 }
 
-fn handle_item(item: &Value, aspect_ratio: f32) -> Video
+fn handle_item(item: &Value, aspect_ratio: f32, content_index_provider: &mut Cycle<Range<usize>>) -> Video
 {
     let title_map = {
         let mut title_map = HashMap::new();
@@ -86,10 +89,10 @@ fn handle_item(item: &Value, aspect_ratio: f32) -> Video
         &appropriate_tiles[content_type]["default"]["url"]
     };
 
-    Video { _name: item_name.to_string(), url: tile_url.as_str().unwrap().to_owned() }
+    Video { _name: item_name.to_string(), url: tile_url.as_str().unwrap().to_owned(), content_index: 0 }
 }
 
-async fn get_collections(aspect_ratio: f32) -> Vec<Collection>
+async fn get_collections(aspect_ratio: f32, content_count: usize) -> Vec<Collection>
 {
     let body =
         reqwest::get("https://cd-static.bamgrid.com/dp-117731241344/home.json").await.unwrap().text().await.unwrap();
@@ -97,6 +100,8 @@ async fn get_collections(aspect_ratio: f32) -> Vec<Collection>
     let json: Value = serde_json::from_str(&body).unwrap();
 
     let mut collections = Vec::new();
+
+    let mut content_index_provider = (0 .. content_count).cycle();
 
     if let Value::Array(containers) = &json["data"]["StandardCollection"]["containers"]
     {
@@ -116,7 +121,9 @@ async fn get_collections(aspect_ratio: f32) -> Vec<Collection>
             {
                 for item in set["items"].as_array().unwrap()
                 {
-                    collection.videos.push(handle_item(item, aspect_ratio));
+                    let mut the_item = handle_item(item, aspect_ratio, &mut content_index_provider);
+                    the_item.content_index = content_index_provider.next().unwrap();
+                    collection.videos.push(the_item);
                 }
             }
             else
@@ -136,7 +143,7 @@ async fn get_collections(aspect_ratio: f32) -> Vec<Collection>
 
                 for item in set["items"].as_array().unwrap()
                 {
-                    collection.videos.push(handle_item(item, aspect_ratio));
+                    collection.videos.push(handle_item(item, aspect_ratio, &mut content_index_provider));
                 }
             }
 
@@ -249,7 +256,31 @@ async fn main()
 
         let aspect_ratio = STARTING_WINDOW_HEIGHT / STARTING_WINDOW_WIDTH;
 
-        let collections_future = get_collections(aspect_ratio);
+        let all_content = {
+            let mut vec = Vec::new();
+
+            vec.push(shaders::load_shader(&gl, shader_version, "res/gpu/hello.vert.glsl", "res/gpu/ann.frag.glsl"));
+            vec.push(shaders::load_shader(&gl, shader_version, "res/gpu/hello.vert.glsl", "res/gpu/sdf.frag.glsl"));
+            vec.push(shaders::load_shader(
+                &gl,
+                shader_version,
+                "res/gpu/hello.vert.glsl",
+                "res/gpu/warping-procedural2.frag.glsl",
+            ));
+            vec.push(shaders::load_shader(
+                &gl,
+                shader_version,
+                "res/gpu/hello.vert.glsl",
+                "res/gpu/integer-raymarcher2.frag.glsl",
+            ));
+
+            // vec.push(shaders::load_shader(&gl, shader_version, "res/gpu/hello.vert.glsl",
+            // "res/gpu/mosaic.frag.glsl"));
+
+            vec
+        };
+
+        let collections_future = get_collections(aspect_ratio, all_content.len());
         tokio::pin!(collections_future);
 
         let mut selection = glam::Vec2::ZERO;
@@ -560,15 +591,22 @@ async fn main()
                     Event::KeyDown { keycode: Some(Keycode::Return), .. }
                         if camera_tweens.is_empty() && col_tweens.is_empty() && collections.is_some() =>
                     {
-                        showing_content = Some(sdf_program);
+                        if let Some(ref collections) = collections
+                        {
+                            let content_index = collections[selection.y as usize].videos
+                                [collections[selection.y as usize].selected_video as usize]
+                                .content_index;
 
-                        #[rustfmt::skip]
-                        content_tweens.push_back(
-                            keyframes![
-                                (0.0, 0.0, functions::EaseInOut),
-                                (1.0, 1.0, functions::EaseInOut)
-                            ]
-                        );
+                            showing_content = Some(all_content[content_index]);
+
+                            #[rustfmt::skip]
+                            content_tweens.push_back(
+                                keyframes![
+                                    (0.0, 0.0, functions::EaseInOut),
+                                    (1.0, 1.0, functions::EaseInOut)
+                                ]
+                            );
+                        }
                     }
 
                     Event::KeyDown { keycode: Some(Keycode::Escape), .. } if showing_content.is_some() =>
