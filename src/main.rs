@@ -40,6 +40,8 @@ struct Collection
     selected_video: i32,
 }
 
+const CONTENT_NOT_SET: usize = 50000;
+
 #[derive(Clone)]
 struct Video
 {
@@ -48,7 +50,7 @@ struct Video
     content_index: usize,
 }
 
-fn handle_item(item: &Value, aspect_ratio: f32, content_index_provider: &mut Cycle<Range<usize>>) -> Video
+fn handle_item(item: &Value, aspect_ratio: f32) -> Video
 {
     let title_map = {
         let mut title_map = HashMap::new();
@@ -89,10 +91,10 @@ fn handle_item(item: &Value, aspect_ratio: f32, content_index_provider: &mut Cyc
         &appropriate_tiles[content_type]["default"]["url"]
     };
 
-    Video { _name: item_name.to_string(), url: tile_url.as_str().unwrap().to_owned(), content_index: 0 }
+    Video { _name: item_name.to_string(), url: tile_url.as_str().unwrap().to_owned(), content_index: CONTENT_NOT_SET }
 }
 
-async fn get_collections(aspect_ratio: f32, content_count: usize) -> Vec<Collection>
+async fn get_collections(aspect_ratio: f32) -> Vec<Collection>
 {
     let body =
         reqwest::get("https://cd-static.bamgrid.com/dp-117731241344/home.json").await.unwrap().text().await.unwrap();
@@ -100,8 +102,6 @@ async fn get_collections(aspect_ratio: f32, content_count: usize) -> Vec<Collect
     let json: Value = serde_json::from_str(&body).unwrap();
 
     let mut collections = Vec::new();
-
-    let mut content_index_provider = (0 .. content_count).cycle();
 
     if let Value::Array(containers) = &json["data"]["StandardCollection"]["containers"]
     {
@@ -121,9 +121,7 @@ async fn get_collections(aspect_ratio: f32, content_count: usize) -> Vec<Collect
             {
                 for item in set["items"].as_array().unwrap()
                 {
-                    let mut the_item = handle_item(item, aspect_ratio, &mut content_index_provider);
-                    the_item.content_index = content_index_provider.next().unwrap();
-                    collection.videos.push(the_item);
+                    collection.videos.push(handle_item(item, aspect_ratio));
                 }
             }
             else
@@ -143,7 +141,7 @@ async fn get_collections(aspect_ratio: f32, content_count: usize) -> Vec<Collect
 
                 for item in set["items"].as_array().unwrap()
                 {
-                    collection.videos.push(handle_item(item, aspect_ratio, &mut content_index_provider));
+                    collection.videos.push(handle_item(item, aspect_ratio));
                 }
             }
 
@@ -256,46 +254,7 @@ async fn main()
 
         let aspect_ratio = STARTING_WINDOW_HEIGHT / STARTING_WINDOW_WIDTH;
 
-        let all_content = {
-            let mut vec = Vec::new();
-
-            vec.push(shaders::load_shader(&gl, shader_version, "res/gpu/hello.vert.glsl", "res/gpu/heart.frag.glsl"));
-
-            vec.push(shaders::load_shader(
-                &gl,
-                shader_version,
-                "res/gpu/hello.vert.glsl",
-                "res/gpu/two-tweets.frag.glsl",
-            ));
-
-            vec.push(shaders::load_shader(
-                &gl,
-                shader_version,
-                "res/gpu/hello.vert.glsl",
-                "res/gpu/happy-jumping.frag.glsl",
-            ));
-            vec.push(shaders::load_shader(&gl, shader_version, "res/gpu/hello.vert.glsl", "res/gpu/ann.frag.glsl"));
-            vec.push(shaders::load_shader(&gl, shader_version, "res/gpu/hello.vert.glsl", "res/gpu/sdf.frag.glsl"));
-            vec.push(shaders::load_shader(
-                &gl,
-                shader_version,
-                "res/gpu/hello.vert.glsl",
-                "res/gpu/warping-procedural2.frag.glsl",
-            ));
-            vec.push(shaders::load_shader(
-                &gl,
-                shader_version,
-                "res/gpu/hello.vert.glsl",
-                "res/gpu/integer-raymarcher2.frag.glsl",
-            ));
-
-            // vec.push(shaders::load_shader(&gl, shader_version, "res/gpu/hello.vert.glsl",
-            // "res/gpu/mosaic.frag.glsl"));
-
-            vec
-        };
-
-        let collections_future = get_collections(aspect_ratio, all_content.len());
+        let collections_future = get_collections(aspect_ratio);
         tokio::pin!(collections_future);
 
         let mut selection = glam::Vec2::ZERO;
@@ -339,12 +298,52 @@ async fn main()
 
         let mut showing_content = None;
         let mut content_size = 0.0;
-        let sdf_program = shaders::load_shader(
-            &gl,
-            shader_version,
-            "res/gpu/hello.vert.glsl",
-            "res/gpu/warping-procedural2.frag.glsl",
-        );
+        let all_content = {
+            let mut vec = Vec::new();
+
+            vec.push(shaders::load_shader(
+                &gl,
+                shader_version,
+                "res/gpu/hello.vert.glsl",
+                "res/gpu/apollonian.frag.glsl",
+            ));
+
+            vec.push(shaders::load_shader(&gl, shader_version, "res/gpu/hello.vert.glsl", "res/gpu/heart.frag.glsl"));
+
+            vec.push(shaders::load_shader(
+                &gl,
+                shader_version,
+                "res/gpu/hello.vert.glsl",
+                "res/gpu/two-tweets.frag.glsl",
+            ));
+
+            vec.push(shaders::load_shader(
+                &gl,
+                shader_version,
+                "res/gpu/hello.vert.glsl",
+                "res/gpu/happy-jumping.frag.glsl",
+            ));
+            vec.push(shaders::load_shader(&gl, shader_version, "res/gpu/hello.vert.glsl", "res/gpu/ann.frag.glsl"));
+            vec.push(shaders::load_shader(&gl, shader_version, "res/gpu/hello.vert.glsl", "res/gpu/sdf.frag.glsl"));
+            vec.push(shaders::load_shader(
+                &gl,
+                shader_version,
+                "res/gpu/hello.vert.glsl",
+                "res/gpu/warping-procedural2.frag.glsl",
+            ));
+            vec.push(shaders::load_shader(
+                &gl,
+                shader_version,
+                "res/gpu/hello.vert.glsl",
+                "res/gpu/integer-raymarcher2.frag.glsl",
+            ));
+
+            // vec.push(shaders::load_shader(&gl, shader_version, "res/gpu/hello.vert.glsl",
+            // "res/gpu/mosaic.frag.glsl"));
+
+            vec
+        };
+        let mut content_index_provider = (0 .. all_content.len()).cycle();
 
         while running
         {
@@ -372,28 +371,28 @@ async fn main()
                 tokio::pin!(timeout);
 
                 // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-                // tokio::select! {
-                //     _ = &mut timeout => (),
+                tokio::select! {
+                    _ = &mut timeout => (),
 
-                //     http_image = current_job =>
-                //     {
-                //         let url = current_url.take().unwrap();
-                //         pending.remove(&url);
+                    http_image = current_job =>
+                    {
+                        let url = current_url.take().unwrap();
+                        pending.remove(&url);
 
-                //         if let Some(http_image) = http_image
-                //         {
-                //             println!("Fetched Image: {}", url);
-                //             textures.insert(url, upload_image_to_gpu(&gl, http_image));
-                //         }
-                //         else
-                //         {
-                //             println!("Something went wrong for: {}", url);
-                //             failed.insert(url);
-                //         }
+                        if let Some(http_image) = http_image
+                        {
+                            println!("Fetched Image: {}", url);
+                            textures.insert(url, upload_image_to_gpu(&gl, http_image));
+                        }
+                        else
+                        {
+                            println!("Something went wrong for: {}", url);
+                            failed.insert(url);
+                        }
 
-                //         job_complete = true;
-                //     },
-                // };
+                        job_complete = true;
+                    },
+                };
                 // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
             }
             else
@@ -609,13 +608,20 @@ async fn main()
                             && col_tweens.is_empty()
                             && collections.is_some() =>
                     {
-                        if let Some(ref collections) = collections
+                        if let Some(ref mut collections) = collections
                         {
-                            let content_index = collections[selection.y as usize].videos
-                                [collections[selection.y as usize].selected_video as usize]
+                            let current_collection = &mut collections[selection.y as usize];
+
+                            let content_index = &mut current_collection.videos
+                                [current_collection.selected_video as usize]
                                 .content_index;
 
-                            showing_content = Some(all_content[content_index]);
+                            if *content_index == CONTENT_NOT_SET
+                            {
+                                *content_index = content_index_provider.next().unwrap()
+                            }
+
+                            showing_content = Some(all_content[*content_index]);
 
                             #[rustfmt::skip]
                             content_tweens.push_back(
