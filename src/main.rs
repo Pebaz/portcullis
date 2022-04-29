@@ -314,6 +314,9 @@ async fn main()
 
             let mut add_content = |s| vec.push(shaders::load_shader(&gl, shader_version, "res/gpu/hello.vert.glsl", s));
 
+            add_content("res/gpu/sierpinski.frag.glsl");
+            add_content("res/gpu/voronoi-metrics.frag.glsl");
+            add_content("res/gpu/fractal-tiling.frag.glsl");
             add_content("res/gpu/planet-fall.frag.glsl");
             add_content("res/gpu/worms.frag.glsl");
             add_content("res/gpu/mandelbrot.frag.glsl");

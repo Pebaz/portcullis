@@ -15,7 +15,7 @@ uniform sampler2D rectangle_texture;
 
 #define iResolution resolution
 #define iTime time
-#define iMouse vec2(0.0, 0.0)
+#define iMouse vec3(0.0, 0.0, 0.0)
 #define iFrame 0
 
 void main()
