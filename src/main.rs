@@ -41,6 +41,9 @@ struct Collection
 }
 
 const CONTENT_NOT_SET: usize = 50000;
+const JSON_ERR: &'static str = "JSON structure doesn't match expected format. Did the schema change?";
+const API_ERR: &'static str = "Fatal Error: Failed to get any data from API";
+const IMG_ERR: &'static str = "Failed to load image";
 
 #[derive(Clone)]
 struct Video
@@ -60,16 +63,16 @@ fn handle_item(item: &Value, aspect_ratio: f32) -> Video
         title_map
     };
 
-    let item_type = &item["type"].as_str().unwrap();
+    let item_type = &item["type"].as_str().expect(JSON_ERR);
     let content_type = title_map[item_type];
     let item_name = &item["text"]["title"]["full"][content_type]["default"]["content"];
-    let tiles = item["image"]["tile"].as_object().unwrap();
+    let tiles = item["image"]["tile"].as_object().expect(JSON_ERR);
     let ratios = {
         let mut ratios = Vec::<(String, f32)>::new();
         for tile in tiles.keys()
         {
             let tile_string = tile.to_string();
-            let tile_value = tile_string.parse().unwrap();
+            let tile_value = tile_string.parse().expect(JSON_ERR);
             ratios.push((tile_string, tile_value));
         }
         ratios
@@ -77,10 +80,10 @@ fn handle_item(item: &Value, aspect_ratio: f32) -> Video
 
     let closest_aspect_ratio = ratios
         .into_iter()
-        .min_by(|a, b| (a.1 - aspect_ratio).abs().partial_cmp(&(b.1 - aspect_ratio).abs()).unwrap())
+        .min_by(|a, b| (a.1 - aspect_ratio).abs().partial_cmp(&(b.1 - aspect_ratio).abs()).expect(JSON_ERR))
         .unwrap();
 
-    let appropriate_tiles = &tiles[&closest_aspect_ratio.0].as_object().unwrap();
+    let appropriate_tiles = &tiles[&closest_aspect_ratio.0].as_object().expect(JSON_ERR);
 
     let tile_url = if !appropriate_tiles.contains_key(content_type)
     {
@@ -91,7 +94,11 @@ fn handle_item(item: &Value, aspect_ratio: f32) -> Video
         &appropriate_tiles[content_type]["default"]["url"]
     };
 
-    Video { _name: item_name.to_string(), url: tile_url.as_str().unwrap().to_owned(), content_index: CONTENT_NOT_SET }
+    Video {
+        _name: item_name.to_string(),
+        url: tile_url.as_str().expect(JSON_ERR).to_owned(),
+        content_index: CONTENT_NOT_SET,
+    }
 }
 
 async fn get_collections(aspect_ratio: f32) -> Vec<Collection>
@@ -100,16 +107,16 @@ async fn get_collections(aspect_ratio: f32) -> Vec<Collection>
     {
         let body = reqwest::get("https://cd-static.bamgrid.com/dp-117731241344/home.json")
             .await
-            .unwrap()
+            .expect(API_ERR)
             .text()
             .await
-            .unwrap();
+            .expect(API_ERR);
 
-        serde_json::from_str(&body).unwrap()
+        serde_json::from_str(&body).expect(JSON_ERR)
     }
     else
     {
-        serde_json::from_str(include_str!("home.json")).unwrap()
+        serde_json::from_str(include_str!("home.json")).expect(JSON_ERR)
     };
 
     let mut collections = Vec::new();
@@ -123,34 +130,34 @@ async fn get_collections(aspect_ratio: f32) -> Vec<Collection>
             let set = &container["set"];
             let set_name = &set["text"]["title"]["full"]["set"]["default"]["content"];
             let mut collection = Collection {
-                name: set_name.to_owned().as_str().unwrap().to_string(),
+                name: set_name.to_owned().as_str().expect(JSON_ERR).to_string(),
                 videos: Vec::new(),
                 selected_video: 0,
             };
 
-            if set["type"].as_str().unwrap() == "CuratedSet"
+            if set["type"].as_str().expect(JSON_ERR) == "CuratedSet"
             {
-                for item in set["items"].as_array().unwrap()
+                for item in set["items"].as_array().expect(JSON_ERR)
                 {
                     collection.videos.push(handle_item(item, aspect_ratio));
                 }
             }
             else
             {
-                let ref_id = &set["refId"].as_str().unwrap();
+                let ref_id = &set["refId"].as_str().expect(JSON_ERR);
 
                 let body = reqwest::get(format!("https://cd-static.bamgrid.com/dp-117731241344/sets/{ref_id}.json"))
                     .await
-                    .unwrap()
+                    .expect(API_ERR)
                     .text()
                     .await
-                    .unwrap();
+                    .expect(API_ERR);
 
-                let json: Value = serde_json::from_str(&body).unwrap();
+                let json: Value = serde_json::from_str(&body).expect(JSON_ERR);
 
-                let set = json["data"].as_object().unwrap().values().take(1).next().unwrap();
+                let set = json["data"].as_object().expect(JSON_ERR).values().take(1).next().expect(JSON_ERR);
 
-                for item in set["items"].as_array().unwrap()
+                for item in set["items"].as_array().expect(JSON_ERR)
                 {
                     collection.videos.push(handle_item(item, aspect_ratio));
                 }
@@ -214,6 +221,15 @@ impl Camera2D
     }
 }
 
+fn calc_row_height(camera: &Camera2D) -> f32
+{
+    let row_cell_height = camera.viewport.y / 6.0;
+    let title_height = row_cell_height / 4.0;
+    let row_margin = row_cell_height / 5.0;
+    let row_height = title_height + row_cell_height + row_margin;
+    row_height
+}
+
 const STARTING_WINDOW_WIDTH: f32 = 1024.0;
 const STARTING_WINDOW_HEIGHT: f32 = 768.0;
 
@@ -222,8 +238,8 @@ async fn main()
 {
     unsafe {
         let (gl, shader_version, window, mut events_loop, _context) = {
-            let sdl = sdl2::init().unwrap();
-            let video = sdl.video().unwrap();
+            let sdl = sdl2::init().expect("Failed to initialize SDL");
+            let video = sdl.video().expect("Failed to initialize SDL video");
 
             let gl_attr = video.gl_attr();
             gl_attr.set_context_profile(sdl2::video::GLProfile::Core);
@@ -234,10 +250,10 @@ async fn main()
                 .opengl()
                 // 😭 .resizable()
                 .build()
-                .unwrap();
-            let gl_context = window.gl_create_context().unwrap();
+                .expect("Could not create window");
+            let gl_context = window.gl_create_context().expect("Could not create OpenGL context");
             let gl = glow::Context::from_loader_function(|s| video.gl_get_proc_address(s) as *const _);
-            let event_loop = sdl.event_pump().unwrap();
+            let event_loop = sdl.event_pump().expect("Could not obtain event pump from SDL");
 
             (gl, "#version 130", window, event_loop, gl_context)
         };
@@ -249,7 +265,9 @@ async fn main()
 
         gl.clear_color(0.0980392156862745, 0.129411764705882, 0.180392156862745, 1.0);
 
-        let font = ab_glyph::FontArc::try_from_slice(include_bytes!("../res/font/Roboto/Roboto-Regular.ttf")).unwrap();
+        let font = ab_glyph::FontArc::try_from_slice(include_bytes!("../res/font/Roboto/Roboto-Regular.ttf"))
+            .expect("Failed to load font");
+
         let mut glyph_brush = GlyphBrushBuilder::using_font(font).build(&gl);
 
         let mut running = true;
@@ -276,25 +294,25 @@ async fn main()
         let disney_logo =
             image::io::Reader::new(std::io::Cursor::new(include_bytes!("../res/img/DisneyPlus-Logo.png")))
                 .with_guessed_format()
-                .unwrap()
+                .expect(IMG_ERR)
                 .decode()
-                .unwrap();
+                .expect(IMG_ERR);
         let disney_logo_dims = glam::vec2(disney_logo.width() as f32, disney_logo.height() as f32);
         let disney_logo_texture = upload_image_to_gpu(&gl, disney_logo);
 
         let spinner = image::io::Reader::new(std::io::Cursor::new(include_bytes!("../res/img/Spinner.png")))
             .with_guessed_format()
-            .unwrap()
+            .expect(IMG_ERR)
             .decode()
-            .unwrap();
+            .expect(IMG_ERR);
         // let spinner_dims = glam::vec2(spinner.width() as f32, spinner.height() as f32);
         let spinner_texture = upload_image_to_gpu(&gl, spinner);
         let mut spinner_rotation_angle_degrees: f32 = 0.0;
         let mut spinners = Vec::new();
 
-        let mut textures: HashMap<String, NativeTexture> = HashMap::new();  // Successfully loaded textures
-        let mut pending: HashSet<String> = HashSet::new();  // Any pending, non-current jobs
-        let mut failed: HashSet<String> = HashSet::new();  // Prevents repeated fetches for failed images
+        let mut textures: HashMap<String, NativeTexture> = HashMap::new(); // Successfully loaded textures
+        let mut pending: HashSet<String> = HashSet::new(); // Any pending, non-current jobs
+        let mut failed: HashSet<String> = HashSet::new(); // Prevents repeated fetches for failed images
         let mut current_job = None;
         let mut current_url: Option<String> = None;
 
@@ -304,47 +322,7 @@ async fn main()
 
         let mut showing_content = None;
         let mut content_size = 0.0;
-        let all_content = {
-            let mut vec = Vec::new();
-
-            let mut add_content = |s| vec.push(shaders::load_shader(&gl, shader_version, "res/gpu/hello.vert.glsl", s));
-
-            add_content("res/gpu/neon-futures.frag.glsl");
-            add_content("res/gpu/protean-clouds.frag.glsl");
-            add_content("res/gpu/rolling-cubes-army.frag.glsl");
-            add_content("res/gpu/rounding-the-square.frag.glsl");
-            add_content("res/gpu/julia-traps.frag.glsl");
-            add_content("res/gpu/clover.frag.glsl");
-            add_content("res/gpu/iterations-coral.frag.glsl");
-            add_content("res/gpu/eye.frag.glsl");
-            add_content("res/gpu/cubic-bezier3d.frag.glsl");
-            add_content("res/gpu/cylinder.frag.glsl");
-            add_content("res/gpu/cubic-bezier.frag.glsl");
-            add_content("res/gpu/slisesix.frag.glsl");
-            add_content("res/gpu/iterations-shiny.frag.glsl");
-            add_content("res/gpu/sierpinski.frag.glsl");
-            add_content("res/gpu/voronoi-metrics.frag.glsl");
-            add_content("res/gpu/fractal-tiling.frag.glsl");
-            add_content("res/gpu/planet-fall.frag.glsl");
-            add_content("res/gpu/worms.frag.glsl");
-            add_content("res/gpu/mandelbrot.frag.glsl");
-            add_content("res/gpu/bubbles.frag.glsl");
-            add_content("res/gpu/juliabulb.frag.glsl");
-            add_content("res/gpu/disk.frag.glsl");
-            add_content("res/gpu/analytic-normals.frag.glsl");
-            add_content("res/gpu/mandelbulb.frag.glsl");
-            add_content("res/gpu/apollonian.frag.glsl");
-            add_content("res/gpu/apollonian.frag.glsl");
-            add_content("res/gpu/heart.frag.glsl");
-            add_content("res/gpu/two-tweets.frag.glsl");
-            add_content("res/gpu/happy-jumping.frag.glsl");
-            add_content("res/gpu/ann.frag.glsl");
-            add_content("res/gpu/sdf.frag.glsl");
-            add_content("res/gpu/warping-procedural2.frag.glsl");
-            add_content("res/gpu/integer-raymarcher2.frag.glsl");
-
-            vec
-        };
+        let all_content = shaders::load_content(&gl, shader_version);
         let mut content_index_provider = (0 .. all_content.len()).cycle();
 
         while running
@@ -528,7 +506,6 @@ async fn main()
                     {
                         if let Some(ref collections) = collections
                         {
-                            let col_origin = collections[selection.y as usize].selected_video;
                             selection.y += 1.0;
 
                             if selection.y >= collections.len() as f32
@@ -540,19 +517,7 @@ async fn main()
 
                             selection.x = col_target as f32;
 
-                            // #[rustfmt::skip]
-                            // col_tweens.push_back(
-                            //     keyframes![
-                            //         (col_origin as f32, 0.0f32, functions::EaseInOut),
-                            //         (col_target as f32, 0.5f32, functions::EaseInOut)
-                            //     ]
-                            // );
-
-                            let row_cell_height = camera.viewport.y / 6.0;
-                            let title_height = row_cell_height / 4.0;
-                            let row_margin = row_cell_height / 5.0;
-                            let row_height = title_height + row_cell_height + row_margin;
-                            // camera.position.y = selection.y * row_height;
+                            let row_height = calc_row_height(&camera);
 
                             let origin = camera.position;
                             let target = glam::Vec2::Y * selection.y * row_height;
@@ -572,7 +537,6 @@ async fn main()
                     {
                         if let Some(ref collections) = collections
                         {
-                            let col_origin = collections[selection.y as usize].selected_video;
                             selection.y -= 1.0;
 
                             if selection.y < 0.0
@@ -582,21 +546,9 @@ async fn main()
 
                             let col_target = collections[selection.y as usize].selected_video;
 
-                            // #[rustfmt::skip]
-                            // col_tweens.push_back(
-                            //     keyframes![
-                            //         (col_origin as f32, 0.0f32, functions::EaseInOut),
-                            //         (col_target as f32, 0.5f32, functions::EaseInOut)
-                            //     ]
-                            // );
-
                             selection.x = col_target as f32;
 
-                            let row_cell_height = camera.viewport.y / 6.0;
-                            let title_height = row_cell_height / 4.0;
-                            let row_margin = row_cell_height / 5.0;
-                            let row_height = title_height + row_cell_height + row_margin;
-                            // camera.position.y = selection.y * row_height;
+                            let row_height = calc_row_height(&camera);
 
                             let origin = camera.position;
                             let target = glam::Vec2::Y * selection.y * row_height;
