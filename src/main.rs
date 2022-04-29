@@ -259,6 +259,8 @@ async fn main()
         let all_content = {
             let mut vec = Vec::new();
 
+            vec.push(shaders::load_shader(&gl, shader_version, "res/gpu/hello.vert.glsl", "res/gpu/heart.frag.glsl"));
+
             vec.push(shaders::load_shader(
                 &gl,
                 shader_version,
@@ -602,7 +604,10 @@ async fn main()
                     }
 
                     Event::KeyDown { keycode: Some(Keycode::Return), .. }
-                        if camera_tweens.is_empty() && col_tweens.is_empty() && collections.is_some() =>
+                        if showing_content.is_none()
+                            && camera_tweens.is_empty()
+                            && col_tweens.is_empty()
+                            && collections.is_some() =>
                     {
                         if let Some(ref collections) = collections
                         {
