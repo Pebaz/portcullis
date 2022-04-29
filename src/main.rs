@@ -301,45 +301,24 @@ async fn main()
         let all_content = {
             let mut vec = Vec::new();
 
-            vec.push(shaders::load_shader(
-                &gl,
-                shader_version,
-                "res/gpu/hello.vert.glsl",
-                "res/gpu/apollonian.frag.glsl",
-            ));
+            let mut add_content = |s| vec.push(shaders::load_shader(&gl, shader_version, "res/gpu/hello.vert.glsl", s));
 
-            vec.push(shaders::load_shader(&gl, shader_version, "res/gpu/hello.vert.glsl", "res/gpu/heart.frag.glsl"));
-
-            vec.push(shaders::load_shader(
-                &gl,
-                shader_version,
-                "res/gpu/hello.vert.glsl",
-                "res/gpu/two-tweets.frag.glsl",
-            ));
-
-            vec.push(shaders::load_shader(
-                &gl,
-                shader_version,
-                "res/gpu/hello.vert.glsl",
-                "res/gpu/happy-jumping.frag.glsl",
-            ));
-            vec.push(shaders::load_shader(&gl, shader_version, "res/gpu/hello.vert.glsl", "res/gpu/ann.frag.glsl"));
-            vec.push(shaders::load_shader(&gl, shader_version, "res/gpu/hello.vert.glsl", "res/gpu/sdf.frag.glsl"));
-            vec.push(shaders::load_shader(
-                &gl,
-                shader_version,
-                "res/gpu/hello.vert.glsl",
-                "res/gpu/warping-procedural2.frag.glsl",
-            ));
-            vec.push(shaders::load_shader(
-                &gl,
-                shader_version,
-                "res/gpu/hello.vert.glsl",
-                "res/gpu/integer-raymarcher2.frag.glsl",
-            ));
-
-            // vec.push(shaders::load_shader(&gl, shader_version, "res/gpu/hello.vert.glsl",
-            // "res/gpu/mosaic.frag.glsl"));
+            add_content("res/gpu/worms.frag.glsl");
+            add_content("res/gpu/mandelbrot.frag.glsl");
+            add_content("res/gpu/bubbles.frag.glsl");
+            add_content("res/gpu/juliabulb.frag.glsl");
+            add_content("res/gpu/disk.frag.glsl");
+            add_content("res/gpu/analytic-normals.frag.glsl");
+            add_content("res/gpu/mandelbulb.frag.glsl");
+            add_content("res/gpu/apollonian.frag.glsl");
+            add_content("res/gpu/apollonian.frag.glsl");
+            add_content("res/gpu/heart.frag.glsl");
+            add_content("res/gpu/two-tweets.frag.glsl");
+            add_content("res/gpu/happy-jumping.frag.glsl");
+            add_content("res/gpu/ann.frag.glsl");
+            add_content("res/gpu/sdf.frag.glsl");
+            add_content("res/gpu/warping-procedural2.frag.glsl");
+            add_content("res/gpu/integer-raymarcher2.frag.glsl");
 
             vec
         };
