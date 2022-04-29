@@ -1,6 +1,4 @@
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::iter::Cycle;
-use std::ops::Range;
 
 use glam;
 use glow::*;
@@ -12,6 +10,8 @@ use sdl2::keyboard::Keycode;
 use serde_json::Value;
 
 mod shaders;
+
+const RUN_LOCAL: bool = true; // Use local home.json copy, don't load images
 
 #[derive(Clone, Copy, Default, CanTween)]
 struct V2(f32, f32);
@@ -96,10 +96,21 @@ fn handle_item(item: &Value, aspect_ratio: f32) -> Video
 
 async fn get_collections(aspect_ratio: f32) -> Vec<Collection>
 {
-    let body =
-        reqwest::get("https://cd-static.bamgrid.com/dp-117731241344/home.json").await.unwrap().text().await.unwrap();
+    let json: Value = if RUN_LOCAL
+    {
+        let body = reqwest::get("https://cd-static.bamgrid.com/dp-117731241344/home.json")
+            .await
+            .unwrap()
+            .text()
+            .await
+            .unwrap();
 
-    let json: Value = serde_json::from_str(&body).unwrap();
+        serde_json::from_str(&body).unwrap()
+    }
+    else
+    {
+        serde_json::from_str(include_str!("home.json")).unwrap()
+    };
 
     let mut collections = Vec::new();
 
@@ -303,6 +314,7 @@ async fn main()
 
             let mut add_content = |s| vec.push(shaders::load_shader(&gl, shader_version, "res/gpu/hello.vert.glsl", s));
 
+            add_content("res/gpu/planet-fall.frag.glsl");
             add_content("res/gpu/worms.frag.glsl");
             add_content("res/gpu/mandelbrot.frag.glsl");
             add_content("res/gpu/bubbles.frag.glsl");
@@ -349,30 +361,31 @@ async fn main()
                 let timeout = tokio::time::sleep(tokio::time::Duration::from_millis(1));
                 tokio::pin!(timeout);
 
-                // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-                tokio::select! {
-                    _ = &mut timeout => (),
+                if !RUN_LOCAL
+                {
+                    tokio::select! {
+                        _ = &mut timeout => (),
 
-                    http_image = current_job =>
-                    {
-                        let url = current_url.take().unwrap();
-                        pending.remove(&url);
-
-                        if let Some(http_image) = http_image
+                        http_image = current_job =>
                         {
-                            println!("Fetched Image: {}", url);
-                            textures.insert(url, upload_image_to_gpu(&gl, http_image));
-                        }
-                        else
-                        {
-                            println!("Something went wrong for: {}", url);
-                            failed.insert(url);
-                        }
+                            let url = current_url.take().unwrap();
+                            pending.remove(&url);
 
-                        job_complete = true;
-                    },
-                };
-                // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                            if let Some(http_image) = http_image
+                            {
+                                println!("Fetched Image: {}", url);
+                                textures.insert(url, upload_image_to_gpu(&gl, http_image));
+                            }
+                            else
+                            {
+                                println!("Something went wrong for: {}", url);
+                                failed.insert(url);
+                            }
+
+                            job_complete = true;
+                        },
+                    };
+                }
             }
             else
             {
