@@ -289,8 +289,10 @@ async fn main()
 
         let mut camera_tweens = VecDeque::<AnimationSequence<V2>>::new();
         let mut col_tweens = VecDeque::<AnimationSequence<f32>>::new();
+        let mut content_tweens = VecDeque::<AnimationSequence<f32>>::new();
 
         let mut showing_content = None;
+        let mut content_size = 0.0;
         let sdf_program = shaders::load_shader(
             &gl,
             shader_version,
@@ -390,6 +392,24 @@ async fn main()
                 {
                     col_tweens[0].advance_by(time_delta as f64);
                     selection.x = col_tweens[0].now();
+                }
+            }
+
+            if !content_tweens.is_empty()
+            {
+                if content_tweens[0].finished()
+                {
+                    if content_tweens[0].now() < 1.0
+                    {
+                        showing_content = None;
+                    }
+
+                    content_tweens.pop_front();
+                }
+                else
+                {
+                    content_tweens[0].advance_by(time_delta as f64);
+                    content_size = content_tweens[0].now();
                 }
             }
 
@@ -538,14 +558,28 @@ async fn main()
                     }
 
                     Event::KeyDown { keycode: Some(Keycode::Return), .. }
-                        if camera_tweens.is_empty() && col_tweens.is_empty() =>
+                        if camera_tweens.is_empty() && col_tweens.is_empty() && collections.is_some() =>
                     {
                         showing_content = Some(sdf_program);
+
+                        #[rustfmt::skip]
+                        content_tweens.push_back(
+                            keyframes![
+                                (0.0, 0.0, functions::EaseInOut),
+                                (1.0, 1.0, functions::EaseInOut)
+                            ]
+                        );
                     }
 
                     Event::KeyDown { keycode: Some(Keycode::Escape), .. } if showing_content.is_some() =>
                     {
-                        showing_content = None;
+                        #[rustfmt::skip]
+                        content_tweens.push_back(
+                            keyframes![
+                                (1.0, 0.0, functions::EaseInOut),
+                                (0.0, 1.0, functions::EaseInOut)
+                            ]
+                        );
                     }
 
                     Event::KeyDown { keycode: Some(Keycode::Escape), .. } => running = false,
@@ -570,7 +604,7 @@ async fn main()
 
             if showing_content.is_some()
             {
-                let content_dimensions = glam::vec2(window_width, window_height);
+                let content_dimensions = glam::vec2(window_width, window_height) * content_size;
 
                 gl.use_program(showing_content);
 
