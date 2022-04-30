@@ -1,6 +1,5 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 
-use glam;
 use glow::*;
 use glow_glyph::{ab_glyph, GlyphBrushBuilder, Section, Text};
 use keyframe::{functions, keyframes, AnimationSequence};
@@ -16,19 +15,19 @@ const RUN_LOCAL: bool = false; // Use local home.json copy, don't load images
 #[derive(Clone, Copy, Default, CanTween)]
 struct V2(f32, f32);
 
-impl Into<glam::Vec2> for V2
+impl From<V2> for glam::Vec2
 {
-    fn into(self) -> glam::Vec2
+    fn from(v2: V2) -> Self
     {
-        glam::vec2(self.0, self.1)
+        glam::vec2(v2.0, v2.1)
     }
 }
 
-impl Into<V2> for glam::Vec2
+impl From<glam::Vec2> for V2
 {
-    fn into(self) -> V2
+    fn from(v2: glam::Vec2) -> Self
     {
-        V2(self.x, self.y)
+        V2(v2.x, v2.y)
     }
 }
 
@@ -41,9 +40,9 @@ struct Collection
 }
 
 const CONTENT_NOT_SET: usize = 50000;
-const JSON_ERR: &'static str = "JSON structure doesn't match expected format. Did the schema change?";
-const API_ERR: &'static str = "Fatal Error: Failed to get any data from API";
-const IMG_ERR: &'static str = "Failed to load image";
+const JSON_ERR: &str = "JSON structure doesn't match expected format. Did the schema change?";
+const API_ERR: &str = "Fatal Error: Failed to get any data from API";
+const IMG_ERR: &str = "Failed to load image";
 
 #[derive(Clone)]
 struct Video
@@ -226,8 +225,7 @@ fn calc_row_height(camera: &Camera2D) -> f32
     let row_cell_height = camera.viewport.y / 6.0;
     let title_height = row_cell_height / 4.0;
     let row_margin = row_cell_height / 5.0;
-    let row_height = title_height + row_cell_height + row_margin;
-    row_height
+    title_height + row_cell_height + row_margin
 }
 
 const STARTING_WINDOW_WIDTH: f32 = 1024.0;
@@ -248,7 +246,7 @@ async fn main()
             let window = video
                 .window("Portcullis", STARTING_WINDOW_WIDTH as u32, STARTING_WINDOW_HEIGHT as u32)
                 .opengl()
-                // 😭 .resizable()
+                .resizable()
                 .build()
                 .expect("Could not create window");
             let gl_context = window.gl_create_context().expect("Could not create OpenGL context");
@@ -263,7 +261,7 @@ async fn main()
 
         let program = shaders::load_shader(&gl, shader_version, "res/gpu/hello.vert.glsl", "res/gpu/hello.frag.glsl");
 
-        gl.clear_color(0.0980392156862745, 0.129411764705882, 0.180392156862745, 1.0);
+        gl.clear_color(0.098, 0.129, 0.180, 1.0);
 
         let font = ab_glyph::FontArc::try_from_slice(include_bytes!("../res/font/Roboto/Roboto-Regular.ttf"))
             .expect("Failed to load font");
@@ -279,7 +277,6 @@ async fn main()
         let mut camera = Camera2D::new();
         camera.update_viewport_dimensions(STARTING_WINDOW_WIDTH, STARTING_WINDOW_HEIGHT);
 
-        // let aspect_ratio = STARTING_WINDOW_HEIGHT / STARTING_WINDOW_WIDTH;
         let aspect_ratio = {
             let row_cell_height = camera.viewport.y / 6.0;
             let col_cell_width = camera.viewport.x / 6.0;
@@ -305,7 +302,6 @@ async fn main()
             .expect(IMG_ERR)
             .decode()
             .expect(IMG_ERR);
-        // let spinner_dims = glam::vec2(spinner.width() as f32, spinner.height() as f32);
         let spinner_texture = upload_image_to_gpu(&gl, spinner);
         let mut spinner_rotation_angle_degrees: f32 = 0.0;
         let mut spinners = Vec::new();
@@ -376,14 +372,11 @@ async fn main()
                     };
                 }
             }
-            else
+            else if !pending.is_empty()
             {
-                for url in pending.iter()
-                {
-                    current_job = Some(Box::pin(load_image_from_http(url.clone())));
-                    current_url = Some(url.clone());
-                    break;
-                }
+                let url = pending.iter().take(1).next().cloned().unwrap();
+                current_job = Some(Box::pin(load_image_from_http(url.clone())));
+                current_url = Some(url);
             }
 
             if job_complete
@@ -607,13 +600,10 @@ async fn main()
 
                     Event::KeyDown { keycode: Some(Keycode::Escape), .. } => running = false,
 
-                    Event::Window { win_event, .. } =>
+                    Event::Window { win_event: WindowEvent::Resized(width, height), .. } =>
                     {
-                        if let WindowEvent::Resized(width, height) = win_event
-                        {
-                            camera.update_viewport_dimensions(width as f32, height as f32);
-                            gl.viewport(0, 0, width, height);
-                        }
+                        camera.update_viewport_dimensions(width as f32, height as f32);
+                        gl.viewport(0, 0, width, height);
                     }
 
                     _ => (),
@@ -719,12 +709,12 @@ async fn main()
 
             glyph_brush.draw_queued(&gl, window_width as u32, window_height as u32).expect("Draw queued");
 
-            if showing_content.is_some()
+            if let Some(content) = showing_content
             {
                 let content_position = (glam::vec2(window_width, window_height) / 2.0) * (1.0 - content_size);
                 let content_dimensions = glam::vec2(window_width, window_height) * content_size;
 
-                gl.use_program(showing_content);
+                gl.use_program(Some(content));
 
                 let time = gl.get_uniform_location(showing_content.unwrap(), "time").unwrap();
                 gl.uniform_1_f32(Some(&time), time_milliseconds);
@@ -734,7 +724,7 @@ async fn main()
 
                 draw_quad(
                     &gl,
-                    showing_content.unwrap(),
+                    content,
                     content_position,
                     content_dimensions,
                     glam::Vec4::ONE,
@@ -760,7 +750,7 @@ unsafe fn draw_quad(
     dimensions: glam::Vec2,
     color: glam::Vec4,
     orthographic_projection_matrix: glam::Mat4,
-) -> ()
+)
 {
     let rectangle_color = gl.get_uniform_location(program, "rectangle_color").unwrap();
     gl.uniform_4_f32(Some(&rectangle_color), color.x, color.y, color.z, color.w);
@@ -789,7 +779,7 @@ unsafe fn draw_quad_textured(
     color: glam::Vec4,
     orthographic_projection_matrix: glam::Mat4,
     texture: NativeTexture,
-) -> ()
+)
 {
     gl.active_texture(glow::TEXTURE0);
     gl.bind_texture(glow::TEXTURE_2D, Some(texture));
@@ -808,8 +798,9 @@ unsafe fn draw_quad_textured(
     gl.bind_texture(glow::TEXTURE_2D, None);
 }
 
+#[allow(clippy::too_many_arguments)]
 unsafe fn draw_all_collections(
-    collections: &Vec<Collection>,
+    collections: &[Collection],
     gl: &Context,
     program: NativeProgram,
     camera: &Camera2D,
@@ -870,7 +861,7 @@ unsafe fn draw_all_collections(
                 {
                     let selection_border_size = 4.0;
                     draw_quad(
-                        &gl,
+                        gl,
                         program,
                         position - glam::vec2(selection_border_size, selection_border_size),
                         dimensions + (glam::vec2(selection_border_size, selection_border_size) * 2.0),
@@ -882,7 +873,7 @@ unsafe fn draw_all_collections(
                 if textures.contains_key(&video.url)
                 {
                     draw_quad_textured(
-                        &gl,
+                        gl,
                         program,
                         position,
                         dimensions,
@@ -894,11 +885,11 @@ unsafe fn draw_all_collections(
                 else
                 {
                     draw_quad(
-                        &gl,
+                        gl,
                         program,
                         position,
                         dimensions,
-                        glam::vec4(0.227450980392157, 0.227450980392157, 0.258823529411765, 0.5),
+                        glam::vec4(0.227, 0.227, 0.258, 0.5),
                         camera.get_matrix(),
                     );
 
@@ -983,7 +974,7 @@ unsafe fn draw_image_centered(
     color: glam::Vec4,
     orthographic_projection_matrix: glam::Mat4,
     texture: NativeTexture,
-) -> ()
+)
 {
     gl.active_texture(glow::TEXTURE0);
     gl.bind_texture(glow::TEXTURE_2D, Some(texture));
