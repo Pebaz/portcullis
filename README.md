@@ -1,3 +1,8 @@
+
+<p align=center>
+    <img src="res/logo/Portcullis.png" alt="Portcullis Project Logo" width=128px>
+</p>
+
 # Portcullis
 
 > Portfolio application making use of OpenGL, Raymarched Signed Distance
