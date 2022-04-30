@@ -2,7 +2,7 @@
 
 > Imagined as a sort of "front gate" to the Disney castle.
 
-![Application Screenshot](res/img/Screenshot.png)
+![Application Screenshot](./res/img/Screenshot.png)
 
 ## Building & Running
 
