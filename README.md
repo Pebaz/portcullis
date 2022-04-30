@@ -1,8 +1,10 @@
 # Portcullis
 
-> Imagined as a sort of "front gate" to the Disney castle.
+> Portfolio application making use of OpenGL, Raymarched Signed Distance
+Functions, and smooth tweening transitions imagined as a sort of "front gate" to
+the Disney castle.
 
-![Application Screenshot](./res/img/Screenshot.png)
+![Application Screenshot](res/img/Screenshot.png)
 
 ## Building & Running
 
